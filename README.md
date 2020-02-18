@@ -1,7 +1,14 @@
 # pscs
 Phase sensitive Clifford simulator - implementation of https://arxiv.org/abs/1808.00128 section 4.1
 
+## files
+* pccs.py - examples of usage in `__name__ == "__main__"`
+* constants.py - useful numerical constants
+* stabstate.py defines the StabState class for holding and manipulating a stabaliser state in CH form
+* cliffords.py - defines the basic Clifford gates
+* measurement.py - defines MeasurementOutcome class for computing overlaps
 
+# Usage
 ## Construct computational basis states
 
 Using the `StabState.basis` class method, pass either `N` an int, to construct the state |0...0> on n qubits, or `s`, a length N, one dimensional numpy array of `0`s and `1`s with `dtype=np.uint8` to construct the basis state given by that binary vector (e.g. `np.array([1,0,1], dtype=np,uint8)` becomes |101> = |1>|0>|1>). If both `N` and `s` are passed then `s` is truncated or extended (from the back) to length `N` as appropriate.
@@ -29,7 +36,7 @@ s1 | CompositeGate([HGate(0), CXGate(1,0)])
 ```
 is equivalent to
 ```
-s1 | HGate(0) | CXGate(1,0),
+s1 | HGate(0) | CXGate(1,0)
 ```
 further, the pipe operation between gates creates a composite gate so `HGate(0) | CXGate(1,0)` is equivalent to  `CompositeGate([HGate(0), GXGate(1,0)])`. Possibly in the future the composite gate could do some optimisations (e.g. cancelling adjacent gates which are inverses of each other).
 
