@@ -23,7 +23,7 @@ The standard Clifford unitaries S, H, CX, and CZ are constructed by passing thei
 
 ## Apply and compose Clifford unitaries
 
-Of course we can apply unitaries to a state, the __or__ operator has been overloaded for this to provide syntax similar to unix pipes. `gate.apply(state)` is equivalent to `state | gate`, if state is a vector |v>, and the gate a unitary U then both result in U|v>. Note that the apply method (and pipe operator) both change the state in place, and return it so
+Of course we can apply unitaries to a state, the `__or__` operator has been overloaded for this to provide syntax similar to unix pipes. `gate.apply(state)` is equivalent to `state | gate`, if state is a vector |v>, and the gate a unitary U then both result in U|v>. Note that the apply method (and pipe operator) both change the state in place, and return it so
 ```
 s1 = StabState.basis(1)
 s2 = s1 | HGate(0)
@@ -54,7 +54,7 @@ b11 = MeasurementOutcome(np.array([1,1], dtype=np.uint8)) # emulates the "bra" <
 state = StabState.basis(2) # the "ket" |00>
 overlap = state | H(0) | b11 # overlap equal to 0 since this is <1|H|0> <1|0>.
 ```
-We can also use the pipe notation to apply gates to a MeasurementOutcome, this means "when you have to compute an overlap, apply those gates, then compute the overlap". In particular
+We can also use the `__or__` pipe notation to apply gates to a MeasurementOutcome, this means "when you have to compute an overlap, apply those gates, then compute the overlap". In particular
 ```
 state | (gate | bra) == state | gate | bra == (state | gate) | bra,
 ```
