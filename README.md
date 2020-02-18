@@ -1,7 +1,14 @@
 # pscs
 Phase sensitive Clifford simulator - implementation of https://arxiv.org/abs/1808.00128 section 4.1
 
+## files
+* pccs.py - examples of usage in `__name__ == "__main__"`
+* constants.py - useful numerical constants
+* stabstate.py defines the StabState class for holding and manipulating a stabaliser state in CH form
+* cliffords.py - defines the basic Clifford gates
+* measurement.py - defines MeasurementOutcome class for computing overlaps
 
+# Usage
 ## Construct computational basis states
 
 Using the `StabState.basis` class method, pass either `N` an int, to construct the state |0...0> on n qubits, or `s`, a length N, one dimensional numpy array of `0`s and `1`s with `dtype=np.uint8` to construct the basis state given by that binary vector (e.g. `np.array([1,0,1], dtype=np,uint8)` becomes |101> = |1>|0>|1>). If both `N` and `s` are passed then `s` is truncated or extended (from the back) to length `N` as appropriate.
@@ -16,7 +23,7 @@ The standard Clifford unitaries S, H, CX, and CZ are constructed by passing thei
 
 ## Apply and compose Clifford unitaries
 
-Of course we can apply unitaries to a state, the __or__ operator has been overloaded for this to provide syntax similar to unix pipes. `gate.apply(state)` is equivalent to `state | gate`, if state is a vector |v>, and the gate a unitary U then both result in U|v>. Note that the apply method (and pipe operator) both change the state in place, and return it so
+Of course we can apply unitaries to a state, the `__or__` operator has been overloaded for this to provide syntax similar to unix pipes. `gate.apply(state)` is equivalent to `state | gate`, if state is a vector |v>, and the gate a unitary U then both result in U|v>. Note that the apply method (and pipe operator) both change the state in place, and return it so
 ```
 s1 = StabState.basis(1)
 s2 = s1 | HGate(0)
@@ -29,7 +36,7 @@ s1 | CompositeGate([HGate(0), CXGate(1,0)])
 ```
 is equivalent to
 ```
-s1 | HGate(0) | CXGate(1,0),
+s1 | HGate(0) | CXGate(1,0)
 ```
 further, the pipe operation between gates creates a composite gate so `HGate(0) | CXGate(1,0)` is equivalent to  `CompositeGate([HGate(0), GXGate(1,0)])`. Possibly in the future the composite gate could do some optimisations (e.g. cancelling adjacent gates which are inverses of each other).
 
@@ -47,7 +54,7 @@ b11 = MeasurementOutcome(np.array([1,1], dtype=np.uint8)) # emulates the "bra" <
 state = StabState.basis(2) # the "ket" |00>
 overlap = state | H(0) | b11 # overlap equal to 0 since this is <1|H|0> <1|0>.
 ```
-We can also use the pipe notation to apply gates to a MeasurementOutcome, this means "when you have to compute an overlap, apply those gates, then compute the overlap". In particular
+We can also use the `__or__` pipe notation to apply gates to a MeasurementOutcome, this means "when you have to compute an overlap, apply those gates, then compute the overlap". In particular
 ```
 state | (gate | bra) == state | gate | bra == (state | gate) | bra,
 ```
