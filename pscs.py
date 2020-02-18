@@ -17,7 +17,6 @@ if __name__ == "__main__":
     state2 = StabState.basis(s=[0,1,1])
 
     state1 = state1 | HGate(0) | CXGate(target=1, control=0)
-
     state1.pprint()
     
     #state2 = state2 | entangler 

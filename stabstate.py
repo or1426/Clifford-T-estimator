@@ -82,12 +82,25 @@ class StabState:
     @M.setter
     def M(self, mat):
         self.C = mat
+    @property
+    def gamma(self):
+        return self.g
+    @gamma.setter
+    def gamma(self, mat):
+        self.g = mat
+    @property
+    def w(self):
+        return self.phase
+    @w.setter
+    def w(self, c):
+        self.phase = c
 
     def __or__(self, other : CliffordGate):
         return other.apply(self)
 
     def _rowToStr(row):
         return "".join(map(str,row))
+    
     def toStr(self):
         """
         pretty "to string" method for small qubit numbers

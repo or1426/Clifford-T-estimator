@@ -7,11 +7,26 @@ Phase sensitive Clifford simulator - implementation of https://arxiv.org/abs/180
 * stabstate.py defines the StabState class for holding and manipulating a stabaliser state in CH form
 * cliffords.py - defines the basic Clifford gates
 * measurement.py - defines MeasurementOutcome class for computing overlaps
+* util.py - printing utils
 
 # Usage
 ## Construct computational basis states
 
 Using the `StabState.basis` class method, pass either `N` an int, to construct the state |0...0> on n qubits, or `s`, a length N, one dimensional numpy array of `0`s and `1`s with `dtype=np.uint8` to construct the basis state given by that binary vector (e.g. `np.array([1,0,1], dtype=np,uint8)` becomes |101> = |1>|0>|1>). If both `N` and `s` are passed then `s` is truncated or extended (from the back) to length `N` as appropriate.
+
+The data of the stabiliser state is accessed through the properties `A`, `B`, `C` (equivalent to F, `G`, `M`, respectively), `g` (equivalently `gamma`), `v`, `s` and `w` (equivalently `phase`). A stabiliser state can be converted to a "pretty" string by the `toStr` method and pretty-printed through the `pprint` method. For example
+```
+state1 = StabState.basis(3) | HGate(0) | CXGate(target=1, control=0)
+state1.pprint()
+```
+results in the output
+
+3 110 100 000 0 1 0 (1+0j)
+  010 110 000 0 0 0
+  001 001 000 0 0 0
+
+where 3 is the number of qubits, the first 3x3 block is F, the second is G the third is M the first 3x1 column is gamma, the second 3x1 column is v and the (1+0j) is the overall phase.
+
 
 ## Construct basic Clifford unitaries
 
