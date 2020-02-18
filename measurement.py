@@ -19,18 +19,16 @@ class MeasurementOutcome(object):
             
             t = np.zeros_like(state.v) # t[j] stores the exponent of Z_j (either 0 or 1)
             for p in np.flatnonzero(self.x): # we put a Pauli X on each qubit where the bitstring self.x is 1
-                #print("p = ", p)
                 # we multiply by UC^{-1} X_p UC = i^{gamma_p} prod_ X_j^{F_{pj}} Z_j^{M_{pj}}
                 # first we need to commute each X_j^{F_{pj}} through Z_j^t[j]
                 #this gives a (-1) for each j for which F_{pj} and t[j] are both non-zero
 
                 signBit = signBit ^ (t @ state.A[p] % 2)
-                #print("p = {}, sb = {}".format(p, signBit))
+
                 t = t ^ state.C[p]
-            #print("us = ", u@state.s)
+
             
             signBit = (signBit + u @ t) % 2
             signBit = signBit + (u[state.v == 1] @ state.s[state.v == 1]) %2
-            #print("g = ", state.g[np.flatnonzero(self.x)].sum() % UNSIGNED_4)
             phase = complex(0,1)**(state.g[self.x != 0].sum() % constants.UNSIGNED_4) * ((-1)**signBit)
-            return phase * np.power(2, -state.v.sum()/2)
+            return phase * np.power(2, -(state.v.sum()/2.))

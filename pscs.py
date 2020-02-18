@@ -5,7 +5,7 @@ import numpy as np
 from measurement import MeasurementOutcome
 from stabstate import StabState
 import constants
-from cliffords import SGate, CXGate
+from cliffords import SGate, CXGate, CZGate, HGate
                     
                 
             
@@ -25,9 +25,6 @@ def _basis_test():
 
 
 if __name__ == "__main__":
-    np.set_printoptions(formatter={'bool': lambda b: "1" if b else "0"}) # strictly optional
-    #_basis_test()
-
     s0 = MeasurementOutcome(np.array([0], dtype=np.uint8))
     s1 = MeasurementOutcome(np.array([1], dtype=np.uint8))
     
@@ -41,7 +38,11 @@ if __name__ == "__main__":
     
     state = StabState.basis(s=[1,1])
     #state = cnot.apply(state)
-    state = SGate(1).apply(sgate.apply(state))
+    #state = SGate(1).apply(sgate.apply(state))
+    #state = CXGate(control=0,target=1).apply(HGate(0).apply(state))
+
+    state = CZGate(0, 1).apply(state)
+    
     #print(s01.overlap(state))
     #print(s.overlap(state))
     

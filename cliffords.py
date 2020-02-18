@@ -60,15 +60,15 @@ class CXGate(CTypeCliffordGate):
         self.target = target
         self.control = control
     def rightMultiplyC(self, state: StabState) -> StabState:
-        state.B[:,self.target] = state.B[:,self.target] ^ state.B[:,self.control]
-        state.A[:,self.control] = state.A[:,self.control] ^ state.A[:,self.target]
-        state.C[:,self.target] = state.C[:,self.target] ^ state.C[:,self.control]
+        state.B[:,self.control] = state.B[:,self.control] ^ state.B[:,self.target]
+        state.A[:,self.target] = state.A[:,self.target] ^ state.A[:,self.control]
+        state.C[:,self.control] = state.C[:,self.control] ^ state.C[:,self.target]
         return state
     def leftMultiplyC(self, state: StabState) -> StabState:
-        state.B[self.control] = state.B[self.control] ^ state.B[self.target] 
-        state.A[self.target] = state.A[self.target] ^ state.A[self.control]
-        state.C[self.target] = state.C[self.target] ^ state.C[self.control]
-        state.g[self.target] = (state.g[self.target] + state.g[self.control] + 2* (state.C[self.target] @ state.A[self.control] % 2)) % constants.UNSIGNED_4
+        state.B[self.target] = state.B[self.target] ^ state.B[self.control] 
+        state.A[self.control] = state.A[self.control] ^ state.A[self.target]
+        state.C[self.control] = state.C[self.control] ^ state.C[self.target]
+        state.g[self.control] = (state.g[self.control] + state.g[self.target] + 2* (state.C[self.control] @ state.A[self.target] % 2)) % constants.UNSIGNED_4
         return state
 
 class CZGate(CTypeCliffordGate):
@@ -77,15 +77,15 @@ class CZGate(CTypeCliffordGate):
     """
     def __init__(self, target: int, control: int):
         self.target = target
-        self.control = self.control
+        self.control = control
     def rightMultiplyC(self, state: StabState) -> StabState:
-        state.C[:,self.target] = state.C[:,self.target] ^ state.A[:,self.control]
         state.C[:,self.control] = state.C[:,self.control] ^ state.A[:,self.target]
-        state.g = (state.g + 2 * state.A[:,self.target] * state.A[:,self.control]) % constants.UNSIGNED_4
+        state.C[:,self.target] = state.C[:,self.target] ^ state.A[:,self.control]
+        state.g = (state.g + 2 * state.A[:,self.control] * state.A[:,self.target]) % constants.UNSIGNED_4
         return state
     def leftMultiplyC(self, state: StabState) -> StabState:
-        state.C[self.target] = state.C[self.target] ^ state.B[self.control]
         state.C[self.control] = state.C[self.control] ^ state.B[self.target]
+        state.C[self.target] = state.C[self.target] ^ state.B[self.control]
         return state
     
     
@@ -97,29 +97,29 @@ class HGate(CliffordGate):
         self.target = target
 
     def apply(self, state: StabState) -> StabState:
-        t = (state.s ^ state.B[target]) * state.v
-        u = state.s ^ (state.A[target]*(~state.v)) ^ (state.C[target]*state.v)
+        t = state.s + (state.B[self.target]* state.v)  %2
+        u = (state.s + (state.A[self.target]*(1-state.v)) + (state.C[self.target]*state.v)) % 2
 
-        alpha = (state.B[target]*(~v)*state.s).sum()
-        beta = (state.C[target]*(~v)*state.s + state.A[target]*state.v*(state.C[target] + state.s)).sum()
+        alpha = (state.B[self.target]*np.uint8(1-state.v)*state.s).sum()
+        beta = (state.C[self.target]*np.uint8(1-state.v)*state.s + state.A[self.target]*state.v*(state.C[self.target] + state.s)).sum()
         
         if all(t == u):
-            state.phase = state.phase * ((-1)**alpha + (compex(0,1)**state.g[target])*(-1)**beta)/np.sqrt(2)
+            state.phase = state.phase * ((-1)**alpha + (complex(0,1)**state.g[self.target])*(-1)**beta)/np.sqrt(2)
             return state
         else:
-            tNeqUArray = np.argwhere(t != u)            
-            v0 = np.argwhere((state.v == 0) & tNeqUArray)
-            v1 = np.argwhere((state.v == 1) & tNeqUArray)
+            tNeqUArray = t != u
+            v0 = np.flatnonzero((state.v == 0) & tNeqUArray)
+            v1 = np.flatnonzero((state.v == 1) & tNeqUArray)
+            
             q = None
             VCList = []
-            
-            if v0.any():
-                q = v0.nonzero()[0]
+
+            if len(v0) > 0:
+                q = v0[0]
                 VCList = [CXGate(q, i) for i in v0   if i != q]  + [CZGate(q,i) for i in v1] # this matches the first equation of page 20 - but I think it might be wrong
             else:
                 q = v1.nonzero()[0]
                 VCList = [CXGate(q, i) for i in v1 if i != q]
-
             y, z = None, None
             if t[q] == 1:
                 y = np.copy(u)
@@ -129,7 +129,7 @@ class HGate(CliffordGate):
                 y = np.copy(t)
                 z = np.copy(t)
                 z[q] = ~z[q]
-                
+
             #now we care about the state H_q^{v_q}  (|y_q> + i^delta |z_q>)
             #where y_q != z_q
             #lets put this in a standard form
@@ -138,6 +138,7 @@ class HGate(CliffordGate):
             
             w = 0
             d = state.g[q] + 2*(alpha + beta) % constants.UNSIGNED_4
+
             k = d
             if y[q] == 1: #so z[q] == 1
                 w = d
@@ -145,40 +146,21 @@ class HGate(CliffordGate):
 
             # now we write H^{v_q} (|0> + i^(k) |1>) = S^a H^b |c>
             a, b, c = None, None, None
-            if v[q] == 0: 
-                if k == 0:
-                    a = 0
-                    b = 1
-                    c = 0
-                elif k == 1:
-                    a = 1
-                    b = 1
-                    c = 0
-                elif k == 2:
-                    a = 1
-                    b = 0
-                    c = 1
-                elif k == 3:
-                    a = 1
-                    b = 1
-                    c = 1
-            else: # v[q] == 1
-                if k == 0:
-                    a = 0
-                    b = 0
-                    c = 0
-                elif k == 1:
-                    a = 1
-                    b = 1
-                    c = 1
-                elif k == 2:
-                    a = 0
-                    b = 0
-                    c = 1
-                elif k == 3:
-                    a = 1
-                    b = 1
-                    c = 0
+            b = (state.v[q] + 1) %2
+
+            if k == 0:
+                a = 0
+                c = 0
+            elif k == 1:
+                a = 1
+                c = 0
+            elif k == 2:
+                a = 0
+                c = 1
+            elif k == 3:
+                a = 1
+                c = 1
+                
             state.phase = state.phase * complex(0,1)**w
             state.v = y
             state.s[q] = c
