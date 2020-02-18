@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 
 @dataclass
-class StabState():
+class StabState:
     N : int # number of qubits
     A : np.ndarray # NxN matrix of bytes (we are using as bits) partly determines U_C
     B : np.ndarray # NxN matrix of bytes (we are using as bits) partly determines U_C
@@ -64,7 +64,50 @@ class StabState():
             else:
                 return StabState.basis(N=None, s = np.concatenate((s, np.zeros(N-len(s), dtype=np.uint8))))  
 
-
+    @property
+    def F(self):
+        return self.A
+    @F.setter
+    def F(self, mat):
+        self.A = mat
+    @property
+    def G(self):
+        return self.B
+    @G.setter
+    def G(self, mat):
+        self.B = mat
+    @property
+    def M(self):
+        return self.C
+    @M.setter
+    def M(self, mat):
+        self.C = mat
 
     def __or__(self, other : CliffordGate):
         return other.apply(self)
+
+    def _rowToStr(row):
+        return "".join(map(str,row))
+    def toStr(self):
+        """
+        pretty "to string" method for small qubit numbers
+        prints blocks F G M gamma v s
+        """
+        qubitNumberStrLen = None
+        s = ""
+        for i, (Fr, Gr, Mr, gr, vr, sr) in enumerate(zip(self.F, self.G, self.M, self.g, self.v, self.s)):
+            if i == 0:
+                s = str(self.N) + " "
+                qubitNumberStrLen = len(s)
+            if i != 0:
+                s += " "*qubitNumberStrLen
+            s += StabState._rowToStr(Fr) + " " + StabState._rowToStr(Gr) + " " + StabState._rowToStr(Mr) + " " + str(gr) + " " + str(vr) + " " + str(sr)
+
+            if i == 0:
+                s += " " + str(self.phase)
+            s += "\n"
+        return s
+        
+        
+    def pprint(self):
+        print(self.toStr())
