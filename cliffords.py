@@ -1,9 +1,20 @@
+from __future__ import annotations
 import numpy as np
 from abc import ABC, abstractmethod
 from stabstate import StabState
 import constants
+import measurement
 
 class CliffordGate(ABC): #abstract base class
+    """
+    base class for both UnitaryCliffordGate and MeasurementOutcome
+    """
+    @abstractmethod
+    def apply(self, state : StabState):
+        pass
+
+    
+class UnitaryCliffordGate(CliffordGate):
     # given a state that looks like
     # w UC UH |s>
     # compute the CH form of the state state
@@ -12,7 +23,17 @@ class CliffordGate(ABC): #abstract base class
     def apply(self, state : StabState) -> StabState:
         pass
 
-class CTypeCliffordGate(CliffordGate): #abstract base class
+    def __or__(self, other: CliffordGate) -> CliffordGate:
+        if isinstance(other, measurement.MeasurementOutcome):
+            other.gates.insert(0, self)
+            return other
+        elif isinstance(other, CompositeGate):
+            other.gates.insert(0,self) # keep composite gates flat - we don't really want composite gates containing composite gates - note we also overide __or__ in CompositeGate
+            return other
+        else:
+            return CompositeGate([self, other])
+        
+class CTypeCliffordGate(UnitaryCliffordGate): #abstract base class
     # given a state that looks like
     # w UC UH |s>
     # compute the CH form of the state state
@@ -89,7 +110,7 @@ class CZGate(CTypeCliffordGate):
         return state
     
     
-class HGate(CliffordGate):
+class HGate(UnitaryCliffordGate):
     """
     Hadamard gate with target
     """
@@ -99,10 +120,8 @@ class HGate(CliffordGate):
     def apply(self, state: StabState) -> StabState:
         t = state.s + (state.B[self.target]* state.v)  %2
         u = (state.s + (state.A[self.target]*(1-state.v)) + (state.C[self.target]*state.v)) % 2
-
         alpha = (state.B[self.target]*np.uint8(1-state.v)*state.s).sum()
         beta = (state.C[self.target]*np.uint8(1-state.v)*state.s + state.A[self.target]*state.v*(state.C[self.target] + state.s)).sum()
-        
         if all(t == u):
             state.phase = state.phase * ((-1)**alpha + (complex(0,1)**state.g[self.target])*(-1)**beta)/np.sqrt(2)
             return state
@@ -110,16 +129,17 @@ class HGate(CliffordGate):
             tNeqUArray = t != u
             v0 = np.flatnonzero((state.v == 0) & tNeqUArray)
             v1 = np.flatnonzero((state.v == 1) & tNeqUArray)
-            
+
             q = None
             VCList = []
 
             if len(v0) > 0:
                 q = v0[0]
-                VCList = [CXGate(q, i) for i in v0   if i != q]  + [CZGate(q,i) for i in v1] # this matches the first equation of page 20 - but I think it might be wrong
+                VCList = [CXGate(control=q, target=i) for i in v0   if i != q]  + [CZGate(control=q,target=i) for i in v1] # this matches the first equation of page 20 - but I think it might be wrong
             else:
                 q = v1.nonzero()[0]
-                VCList = [CXGate(q, i) for i in v1 if i != q]
+                VCList = [CXGate(control=q, target=i) for i in v1 if i != q]
+
             y, z = None, None
             if t[q] == 1:
                 y = np.copy(u)
@@ -128,22 +148,19 @@ class HGate(CliffordGate):
             else: # t[q] == 0
                 y = np.copy(t)
                 z = np.copy(t)
-                z[q] = ~z[q]
-
+                z[q] = (1-z[q]) %2
             #now we care about the state H_q^{v_q}  (|y_q> + i^delta |z_q>)
             #where y_q != z_q
             #lets put this in a standard form
             # i^w (|0> + i^(k) |1>)
             #by factorising out i^delta if necessary
-            
             w = 0
-            d = state.g[q] + 2*(alpha + beta) % constants.UNSIGNED_4
+            d = np.uint8(state.g[q] + 2*(alpha + beta) % constants.UNSIGNED_4)
 
             k = d
             if y[q] == 1: #so z[q] == 1
                 w = d
-                k = (4-d) % constants.UNSIGNED_4 
-
+                k = (4-d) % constants.UNSIGNED_4
             # now we write H^{v_q} (|0> + i^(k) |1>) = S^a H^b |c>
             a, b, c = None, None, None
             b = (state.v[q] + 1) %2
@@ -162,12 +179,41 @@ class HGate(CliffordGate):
                 c = 1
                 
             state.phase = state.phase * complex(0,1)**w
-            state.v = y
+            state.s = y
             state.s[q] = c
-            state.v[q] = b
+            state.v[q] =  b % 2
+
             if a == 1:
                 VCList.append(SGate(q))
 
             for gate in VCList:
                 gate.rightMultiplyC(state)
             return state
+
+        
+class CompositeGate(CliffordGate):
+    """
+    just stores a list of gates and applies them one by one in its apply method
+    """
+    def __init__(self, gates=None):
+        if gates == None:
+            self.gates = []
+        else:
+            self.gates = gates
+
+    def apply(self, state: StabState) -> StabState:
+        for gate in self.gates:
+            gate.apply(state)
+        return state
+
+    def __or__(self, other: CliffordGate) -> CliffordGate:
+        if isinstance(other, measurement.MeasurementOutcome):
+            other.gates = self.gates + other.gates
+            return other
+        elif isinstance(other, CompositeGate):
+            # keep composite gates flat - we don't really want composite gates containing composite gates
+            #note we also check for isinstance(other, CompositeGate) in CliffordGate.__or__
+            self.gates.extend(other.gates)
+        else:
+            self.gates.append(other)
+        return self

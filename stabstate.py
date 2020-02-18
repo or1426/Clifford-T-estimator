@@ -63,3 +63,8 @@ class StabState():
                 return StabState.basis(N=None, s = s[:N])
             else:
                 return StabState.basis(N=None, s = np.concatenate((s, np.zeros(N-len(s), dtype=np.uint8))))  
+
+
+
+    def __or__(self, other : CliffordGate):
+        return other.apply(self)

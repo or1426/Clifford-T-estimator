@@ -1,15 +1,21 @@
 import numpy as np
 from stabstate import StabState
 import constants
+import cliffords
 
-class MeasurementOutcome(object):
-    def __init__(self, x: np.ndarray):
+
+class MeasurementOutcome(cliffords.CliffordGate):
+    def __init__(self, x: np.ndarray, gates=None): # if gates is not None its a list of Clifford unitaries we apply to the state before computing the overlap 
         self.x = np.bool_(x)
+        if gates == None:
+            self.gates = []
 
     #given out outcome <v|, where v is a binary vector of length 2^n
     #and an n-qubit stabiliser state w UC UH |s> = 
     #calculate <v|s>
-    def overlap(self, state: StabState) -> complex: 
+    def apply(self, state: StabState) -> complex:
+        for gate in self.gates:
+            gate.apply(state)
         
         u = ( self.x @ state.A % 2 )
         if any(u[state.v == 0] != state.s[state.v == 0]): # the second product of (56) is equal to 0
