@@ -2,7 +2,7 @@ import numpy as np
 from stabstate import StabState
 import constants
 import cliffords
-
+from util import desuperpositionise
 
 class MeasurementOutcome(cliffords.CliffordGate):
     def __init__(self, x: np.ndarray, gates=None): # if gates is not None its a list of Clifford unitaries we apply to the state before computing the overlap 
@@ -37,23 +37,38 @@ class MeasurementOutcome(cliffords.CliffordGate):
             signBit = (signBit + u @ t) % 2
             signBit = signBit + (u[state.v == 1] @ state.s[state.v == 1]) %2
             phase = complex(0,1)**(state.g[self.x != 0].sum() % constants.UNSIGNED_4) * ((-1)**signBit)
-            return phase * np.power(2, -(state.v.sum()/2.))
+            return phase * np.power(2, -(state.v.sum()/2.)) * state.phase
 
-# class PauliZProjector(cliffords.CliffordGate):
-#     """
-#     Class to model a projector of the form 
-#     (I + (-1)^a_{0} z_0^{b_0})/2 * (I + (-1)^a_{1} z_1^{b_1})/2 * ... (I + (-1)^a_{n-1} z_{n-1}^{b_n-1})/2 
-#     where a and b are length n vectors of bits and z_i is the unitary acting as Pauli-z on qubit i, and the identity on the others
-#     """
-#     def __init__(self, a:np.ndarray, b:np.ndarray):
-#         self.a = a # p is a vector of bits, and P[j] is the power to which z_j is to be raised
-#         self.b = b
+class PauliZProjector(cliffords.CliffordGate):
+    """
+    Class to model a projector of the form 
+    (1/2) * (I + (-1)^a Z_target)
+    where a is an integer and Z_q is the unitiary applying Pauli Z to qubit q and identity to all other qubits
+    """
+    def __init__(self, target:int, a:int):
+        self.target = target
+        self.a = a 
 
-#     """
-#     Applying a projector to a state results in a "state" which is not normalised
-#     the normalisation factor will be kept in the phase of the stabaliser state
-#     """
-#     def apply(self, state: StabState) -> StabState:
-#         #commuting a Pauli z through UC results in a tensor product of a bunch of Pauli zs based on equation 43
-#         pass
+    """
+    Applying a projector to a state results in a "state" which is not normalised
+    the normalisation factor will be kept in the phase of the stabaliser state
+    """
+    def apply(self, state: StabState) -> StabState:
+        #apply commutation rules to get (1/2) (1+ (-1)^a Z_p) UC UH |s> = (1/2) UC UH (1 + (-1)^a (prod_j Z_j^{G_{pj} (1-v_j)} X_j^{G_{pj}^{v_j}}  )) |s>
+        #then we apply the unitaries to |s> to get 
+        # UC UH (|s> + (-1)^(k+a) |t>)
+        k = self.a + (state.B[self.target] * np.uint8(1 + state.v) * state.s).sum(dtype=np.uint8) % np.uint8(2)
+        t = np.uint8((state.B[self.target] * state.v) ^ state.s)
+
+        if all(t == state.s):
+            state.phase *= (1 + (-1)**k)/2
+        else:
+            phase, VCList, v, s = desuperpositionise(state.s, t, np.uint8(2*k), state.v)
+            for gate in VCList:
+                gate.rightMultiplyC(state)
+                
+            state.phase *= phase
+            state.v = v
+            state.s = s
+        return state
         
