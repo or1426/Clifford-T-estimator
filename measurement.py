@@ -38,6 +38,8 @@ class MeasurementOutcome(cliffords.CliffordGate):
             signBit = signBit + (u[state.v == 1] @ state.s[state.v == 1]) %2
             phase = complex(0,1)**(state.g[self.x != 0].sum() % constants.UNSIGNED_4) * ((-1)**signBit)
             return phase * np.power(2, -(state.v.sum()/2.)) * state.phase
+    def __str__(self):
+        return "<" + "".join(self.x) + "|"
 
 class PauliZProjector(cliffords.CliffordGate):
     """
@@ -67,8 +69,10 @@ class PauliZProjector(cliffords.CliffordGate):
             for gate in VCList:
                 gate.rightMultiplyC(state)
                 
-            state.phase *= phase
+            state.phase *= phase / 2 # 2 since P = (I +- Z)/2
             state.v = v
             state.s = s
         return state
         
+    def __str__(self):
+        return "Pz({})".format

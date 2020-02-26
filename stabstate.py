@@ -101,7 +101,7 @@ class StabState:
     def _rowToStr(row):
         return "".join(map(str,row))
     
-    def toStr(self):
+    def __str__(self):
         """
         pretty "to string" method for small qubit numbers
         prints blocks F G M gamma v s
@@ -120,7 +120,3 @@ class StabState:
                 s += " " + str(self.phase)
             s += "\n"
         return s
-        
-        
-    def pprint(self):
-        print(self.toStr())

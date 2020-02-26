@@ -1,5 +1,4 @@
 import numpy as np
-#3from stabstate import StabState
 import constants
 import cliffords
 
@@ -70,7 +69,7 @@ def desuperpositionise(t, u, d, v):
         if y[q] == 1: #so z[q] == 1
             w = d
             k = (4-d) % constants.UNSIGNED_4
-        # now we write H^{v_q} (|0> + i^(k) |1>) = S^a H^b |c>
+        # now we write H^{v_q} (|0> + i^(k) |1>) = sqrt(2) S^a H^b |c>
         a, b, c = None, None, None
 
         b = (v[q] + 1) %2
@@ -88,7 +87,7 @@ def desuperpositionise(t, u, d, v):
             a = 1
             c = 1
 
-        phase = complex(0,1)**w
+        phase = complex(0,1)**w *  np.sqrt(2) # fix normalisation factor 
         s = y
         s[q] = c
         v[q] =  b % 2 

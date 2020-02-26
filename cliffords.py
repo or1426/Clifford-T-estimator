@@ -75,8 +75,8 @@ class SGate(CTypeCliffordGate):
         state.g[self.target] = (state.g[self.target] - 1) % constants.UNSIGNED_4
         return state
 
-    def __repr__(self):
-        return "SGate({})".format(self.target)
+    def __str__(self):
+        return "S({})".format(self.target)
 
 class CXGate(CTypeCliffordGate):
     """
@@ -97,6 +97,9 @@ class CXGate(CTypeCliffordGate):
         state.g[self.control] = (state.g[self.control] + state.g[self.target] + 2* (state.C[self.control] @ state.A[self.target] % 2)) % constants.UNSIGNED_4
         return state
 
+    def __str__(self):
+        return "CX({}, {})".format(self.control, self.target)
+
 class CZGate(CTypeCliffordGate):
     """
     CZ gate with target and contol 
@@ -113,6 +116,8 @@ class CZGate(CTypeCliffordGate):
         state.C[self.control] = state.C[self.control] ^ state.B[self.target]
         state.C[self.target] = state.C[self.target] ^ state.B[self.control]
         return state
+    def __str__(self):
+        return "CX({}, {})".format(self.control, self.target)
 
     
 class HGate(UnitaryCliffordGate):
@@ -137,11 +142,13 @@ class HGate(UnitaryCliffordGate):
                 gate.rightMultiplyC(state)
 
             state.phase *= phase
-            state.phase *= (-1)**alpha / np.sqrt(2)
+            state.phase *= (-1)**alpha / np.sqrt(2) # sqrt(2) since H = (X + Z)/sqrt(2)
             state.v = v
             state.s = s
-
             return state
+        
+    def __str__(self):
+        return "H({})".format(self.target)
 
         
 class CompositeGate(CliffordGate):
@@ -171,3 +178,5 @@ class CompositeGate(CliffordGate):
             self.gates.append(other)
         return self
 
+    def __str__(self):
+        return "[" + ", ".join([gate.__str__() for gate in self.gates]) + "]"
