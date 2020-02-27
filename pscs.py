@@ -11,12 +11,6 @@ import util
 import random
 
 if __name__ == "__main__":
-    state1 = StabState.basis(N=5)
-
-    #state1 = state1 | HGate(0) | CXGate(target=1, control=0) | CXGate(target=2, control=0)
-    #state1 = state1 | HGate(0) | CXGate(target=1, control=0) | CXGate(target=2, control=0) | PauliZProjector(0,0)
-    #print(state1)
-
     qubits, depth, N = 3, 5, 1
     q = 0
     for state, circuit in zip( [StabState.basis(s=s) for s in random.choices(list(itertools.product(range(2), repeat=qubits)), k=N)],
