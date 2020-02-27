@@ -2,7 +2,7 @@ import numpy as np
 from stabstate import StabState
 import constants
 import cliffords
-from util import desuperpositionise
+import util 
 
 class MeasurementOutcome(cliffords.CliffordGate):
     def __init__(self, x: np.ndarray, gates=None): # if gates is not None its a list of Clifford unitaries we apply to the state before computing the overlap 
@@ -65,7 +65,7 @@ class PauliZProjector(cliffords.CliffordGate):
         if all(t == state.s):
             state.phase *= (1 + (-1)**k)/2
         else:
-            phase, VCList, v, s = desuperpositionise(state.s, t, np.uint8(2*k), state.v)
+            phase, VCList, v, s = util.desuperpositionise(state.s, t, np.uint8(2*k), state.v)
             for gate in VCList:
                 gate.rightMultiplyC(state)
                 

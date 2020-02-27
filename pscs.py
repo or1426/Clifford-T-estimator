@@ -5,32 +5,31 @@ import numpy as np
 from measurement import MeasurementOutcome, PauliZProjector
 from stabstate import StabState
 import constants
-from cliffords import SGate, CXGate, CZGate, HGate
+from cliffords import SGate, CXGate, CZGate, HGate, CompositeGate
 import itertools                    
-                
-if __name__ == "__main__":
+import util
+import random
 
+if __name__ == "__main__":
     state1 = StabState.basis(N=5)
 
     #state1 = state1 | HGate(0) | CXGate(target=1, control=0) | CXGate(target=2, control=0)
-    state1 = state1 | HGate(0) | CXGate(target=1, control=0) | CXGate(target=2, control=0) | PauliZProjector(0,0)
-    print(state1)
-    
-    #state2 = state2 | entangler 
-    
-    #python expressions are evaluated left to right so this is (state | HGate(0)) | CXGate(0,1)
+    #state1 = state1 | HGate(0) | CXGate(target=1, control=0) | CXGate(target=2, control=0) | PauliZProjector(0,0)
+    #print(state1)
 
+    qubits, depth, N = 3, 5, 1
+    q = 0
+    for state, circuit in zip( [StabState.basis(s=s) for s in random.choices(list(itertools.product(range(2), repeat=qubits)), k=N)],
+                               util.random_clifford_circuits(qubits=qubits, depth=depth, N=N)):
+        s = state | circuit | PauliZProjector(q,0)
+        print(state)
+        
     
-    #print(s01.overlap(state))
-    #print(s.overlap(state))
-    
-    #state = StabState.basis(s=[1,1])
-    #print(state.g)
-    #state = SGate(1).apply(state)
-    #print(state.g)
-    #state = cnot.apply(state)
-    #for t in itertools.product([0,1], repeat=5):
-    #    print(t, state1 | MeasurementOutcome(np.array(t, dtype=np.uint8)))
+    state = StabState.basis(s=[0,0])
+    state = state | HGate(0) | CXGate(target=1, control=0)
+
+    for t in itertools.product([0,1], repeat=2):
+        print(t, state | MeasurementOutcome(np.array(t, dtype=np.uint8)))
     #print(state1 | s01 )
     #print(state1 | s10 )
     #print(state1 | s11 )
