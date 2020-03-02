@@ -49,46 +49,69 @@ def desuperpositionise(t, u, d, v):
         VCList = [cliffords.CXGate(control=q, target=i) for i in v0   if i != q]  + [cliffords.CZGate(control=q,target=i) for i in v1] 
     else:
         q = v1[0]
-        VCList = [cliffords.CXGate(control=q, target=i) for i in v1 if i != q]
-    
+        VCList = [cliffords.CXGate(control=i, target=q) for i in v1 if i != q]
+
     y, z = None, None
     if t[q] == 1:
         y = np.copy(u)
-        y[q] = ~y[q]
+        y[q] = np.uint((y[q] + 1) %2)
         z = np.copy(u)
     else: # t[q] == 0
         y = np.copy(t)
         z = np.copy(t)
-        z[q] = (1-z[q]) %2
+        z[q] = np.uint8((1+z[q]) %2)
+
     #now we care about the state H_q^{v_q}  (|y_q> + i^delta |z_q>)
     #where y_q != z_q
     #lets put this in a standard form
     # i^w (|0> + i^(k) |1>)
     #by factorising out i^delta if necessary
-    w = 0
-    k = d
+    w = np.uint8(0)
+    k = np.uint8(d)
+    
     if y[q] == 1: #so z[q] == 1
-        w = d
-        k = (4-d) % constants.UNSIGNED_4
+        w = np.uint8(d)
+        k = np.uint8((4-d) % constants.UNSIGNED_4)
     # now we write H^{v_q} (|0> + i^(k) |1>) = sqrt(2) S^a H^b |c>
-    a, b, c = None, None, None
-    
-    b = (v[q] + 1) %2
-    
-    if k == 0:
-        a = 0
-        c = 0
-    elif k == 1:
-        a = 1
-        c = 0
-    elif k == 2:
-        a = 0
-        c = 1
-    elif k == 3:
-        a = 1
-        c = 1
 
-    phase = complex(0,1)**w *  np.sqrt(2) # fix normalisation factor 
+    a, b, c = None, None, None
+    phase = complex(0,1)**w * np.sqrt(2)
+
+    #is therre a better way to write this?
+    if v[q] == 0:
+        b = 1
+        if k == 0:
+            a = 0
+            c = 0
+        elif k == 1:
+            a = 1
+            c = 0
+        elif k == 2:
+            a = 0
+            c = 1
+        elif k == 3:
+            a = 1
+            c = 1
+    else: # v[1] == 1
+        if k == 0:
+            a = 0
+            b = 0
+            c = 0
+        elif k == 1:
+            a = 1
+            b = 1
+            c = 1
+            phase *= complex(1,1)/np.sqrt(2)
+        elif k == 2:
+            a = 0
+            b = 0
+            c = 1
+        elif k == 3:
+            a = 1
+            b = 1
+            c = 0
+            phase *= complex(1,-1)/np.sqrt(2)
+
     s = y
     s[q] = c
     v[q] =  b % 2 
@@ -101,9 +124,9 @@ def desuperpositionise(t, u, d, v):
 
 
 def random_clifford_circuits(qubits, depth, N):
-    #some Cliffords constructors take two params and some take 1
-    params_dict = {cliffords.SGate: 1, cliffords.CXGate: 2, cliffords.CZGate: 2, cliffords.HGate: 1}
+    #some Clifford gate constructors take two params and some take 1
+    params_dict = {cliffords.CXGate: 2, cliffords.HGate: 1, cliffords.SGate: 1, cliffords.CZGate: 2} 
     for _ in range(N):
         gates = random.choices(list(params_dict.keys()), k=depth)
-        yield cliffords.CompositeGate([gate(*random.sample(range(qubits), k=params_dict[gate])  ) for gate in gates])
+        yield cliffords.CompositeGate([gate(*random.sample(range(qubits), k=params_dict[gate])) for gate in gates])
     
