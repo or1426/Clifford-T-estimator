@@ -21,7 +21,7 @@ class QiskitSimulator(object):
         for i, b in enumerate(state):
             if b:
                 circuit.x(i)
-
+        projector = None
         for gate in composite.gates:
             d = gate.data()
             if d[0] == "H":
@@ -32,11 +32,30 @@ class QiskitSimulator(object):
                 circuit.cz(target_qubit=d[1], control_qubit=d[2])
             elif d[0] == "CX":
                 circuit.cx(target_qubit=d[1], control_qubit=d[2])
+            elif d[0] == "PZ":                
+                projector = d
+                break # once we hit a projector the circuit is done                
             else:
-                raise TypeError("Only unitary Clifford gates supported! Recieved: {}".format(gate))
+                raise TypeError("Only unitary Clifford gates and Z projectors supported! Recieved: {}".format(gate))
         job = qiskit.execute(circuit, backend=self.backend,backend_options={"method": "statevector"})
+        statevector = _rearange_state_vector(num_qubits, job.result().get_statevector(circuit))
+        if projector:
+            #we need to zero everything that we aren't projecting onto
+            #this will be half of the entries of the state-vector
+            target_qubit = projector[1]
+            bits_to_zero = None
+            if projector[2] == 0:
+                bit_to_zero = '1'
+            elif projector[2] == 1:
+                bit_to_zero = '0'
+            indices_to_zero = [n for n in range(len(statevector)) if np.binary_repr(n,width=num_qubits)[target_qubit] == bit_to_zero]
+            #print(target_qubit)
+            #print([np.binary_repr(n,width=num_qubits) for n in range(len(statevector))])
+            #print(indices_to_zero)
+            statevector[indices_to_zero] = 0.
+        
         #job = self.backend.run(circuit, backend_options=self.backend_options)
-        return _rearange_state_vector(num_qubits, job.result().get_statevector(circuit))
+        return statevector
 
 
 def _rearange_state_vector(num_qubits, statevector):

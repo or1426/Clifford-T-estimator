@@ -26,7 +26,7 @@ if __name__ == "__main__":
     #   print(t, state | MeasurementOutcome(np.array(t, dtype=np.uint8))) # print out the overlaps with <00|, <01|, <10| and <11
 
     #generate some random computational basis states, some random Clifford circuits and apply them 
-    qubits, depth, N = 10, 20, 1000
+    qubits, depth, N = 15, 20, 10
     np.set_printoptions(linewidth=100)
     #(1, 1)
     #[CX(1, 0), H(0), H(1)]
@@ -68,7 +68,7 @@ if __name__ == "__main__":
     
     
     for vector, circuit in zip( random.choices(list(itertools.product(range(2), repeat=qubits)), k=N),
-                                util.random_clifford_circuits(qubits=qubits, depth=depth, N=N)):
+                                util.random_clifford_circuits_with_z_projectors(qubits=qubits, depth=depth, N=N)):
         state = StabState.basis(s=vector)
         
         sim = qk.QiskitSimulator()

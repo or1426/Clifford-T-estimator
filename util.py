@@ -2,6 +2,7 @@ import numpy as np
 import constants
 import cliffords
 import random
+import measurement
 
 def a2str(a):
     """
@@ -130,3 +131,6 @@ def random_clifford_circuits(qubits, depth, N):
         gates = random.choices(list(params_dict.keys()), k=depth)
         yield cliffords.CompositeGate([gate(*random.sample(range(qubits), k=params_dict[gate])) for gate in gates])
     
+def random_clifford_circuits_with_z_projectors(qubits, depth, N):
+    for target, a, circuit in zip(random.choices(range(qubits), k=N), random.choices(range(1), k=N), random_clifford_circuits(qubits, depth, N)):
+        yield circuit | measurement.PauliZProjector(target,a)

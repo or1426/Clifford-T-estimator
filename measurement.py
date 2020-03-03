@@ -82,4 +82,7 @@ class PauliZProjector(cliffords.CliffordGate):
         return state
         
     def __str__(self):
-        return "Pz({})".format
+        return "Pz({}, {})".format(self.target, self.a)
+
+    def data(self):
+        return "PZ", self.target, self.a
