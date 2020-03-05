@@ -72,7 +72,7 @@ class PauliZProjector(cliffords.CliffordGate):
         if all(t == state.s):
             state.phase *= (1 + (-1)**k)/2
         else:
-            phase, VCList, v, s = util.desuperpositionise(state.s, t, np.uint8(2*k), state.v)
+            phase, VCList, v, s = util.desuperpositionise(state.s, t, np.uint8(2*k % constants.UNSIGNED_4), state.v)
             for gate in VCList:
                 gate.rightMultiplyC(state)
                 

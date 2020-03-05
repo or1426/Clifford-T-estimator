@@ -5,104 +5,77 @@ import numpy as np
 from measurement import MeasurementOutcome, PauliZProjector
 from stabstate import StabState
 import constants
-from cliffords import SGate, CXGate, CZGate, HGate, CompositeGate
+from cliffords import SGate, CXGate, CZGate, HGate, CompositeGate, SwapGate
 import itertools                    
 import util
 import random
 import qk
 
+from numpy import linalg
+
 if __name__ == "__main__":
-
-    #state = StabState.basis(s=[0,0]) # generate a state |00>
-    #state = state | HGate(0) | CXGate(target=1, control=0) #pass it through a Hadamard and a CNOT
-
-    #state.__str__ method prints N F G M gamma v s omega
-    #N is a number (number of qubits), F G and M are block matrices, gamma, v and s are column vectors and omega is a complex number
-    #this is all the information required to describe the state
-    #print(state)
-
+    np.set_printoptions(linewidth=128) #makes printing long matrices a bit better sometimes
     
-    #for t in itertools.product([0,1], repeat=2):
-    #   print(t, state | MeasurementOutcome(np.array(t, dtype=np.uint8))) # print out the overlaps with <00|, <01|, <10| and <11
+    #produce the 3 qubit |000>
+    state1 = StabState.basis(N=3)
 
-    #generate some random computational basis states, some random Clifford circuits and apply them 
-    qubits, depth, N = 15, 20, 10
-    np.set_printoptions(linewidth=100)
-    #(1, 1)
-    #[CX(1, 0), H(0), H(1)]
+    #produce the 2 qubit |01>
+    state2 = StabState.basis(s=[0,1])
+
+    #produce the 3 qubit |111>
+    state3 = StabState.basis(s=[1,1,1])
+
+    #print state1 in the form N F G M gamma v s w
+    #where N is number of qubits, F, G, M and NxN matrices, gamma, v and s are column vectors and w is a complex number
+    #looks like
+    """
+    3 100 100 000 0 0 0 (1+0j)
+      010 010 000 0 0 0
+      001 001 000 0 0 0
+    """
+    print(state1)
+
+    #create a Hadamard gate on qubit 1
+    h = HGate(1)
     
-    #gates = [CXGate(target=0,control=1), SGate(1), CZGate(target=1, control=0), CXGate(target=1,control=0)]
+    #create a cnot with target 0 and control 1
+    cnot = CXGate(0, 1)
+
+    #apply h and cnot to state2 (in that order)
+    state2 = cnot.apply(h.apply(state2))
+
+    #we can overlaps
+    #for example here <01|state2>
+    #should be -1/sqrt(2)
+    overlap = MeasurementOutcome([1,1]).apply(state2)
+    print(overlap)
     
+    #this is kinda hard to read so we can also write application in a way that looks more like a circuit
+    #SGate(1) just produces an S gate applied to qubit 1
+    #it is here just to demonstrate that you don't need to construct the gates in advance
+    state1 = state1 | h | SGate(1) | cnot
 
-    # gates = [HGate(1), SGate(1), HGate(0), CZGate(0,1), HGate(1)]
-    # print(CompositeGate(gates))
-    # vector = np.array([1,1], dtype=np.uint8)
-    # state = StabState.basis(s=vector)
-    # reconstructed_vector = np.zeros(2**qubits, dtype=np.complex)
-    # for i, t in enumerate(itertools.product([0,1], repeat=qubits)):
-    #     reconstructed_vector[i] = MeasurementOutcome(np.array(t, dtype=np.uint8)).apply(state)
-    # tol = 1e-14
-    # reconstructed_vector.real[abs(reconstructed_vector.real) < tol] = 0.0
-    # reconstructed_vector.imag[abs(reconstructed_vector.imag) < tol] = 0.0
-    # print(reconstructed_vector)
+    #this produces the state  (|0>|0> + i |1>|1>)|0>/sqrt(2)
+    print(state1)
+
+    #we can verify this computation by computing the overlaps with each computational basis state
+    reconstructed_vector = np.zeros(2**(state1.N), dtype=np.complex) # we give the dtype otherwise numpy throws away the imaginary part
+    for i, t in enumerate(itertools.product([0,1], repeat=state1.N)):
+        reconstructed_vector[i] = state1 | MeasurementOutcome(np.array(t, dtype=np.uint8)) 
+
+    #should be (very close to) [0.70710678, 0., 0., 0., 0., 0., 0.70710678j 0.] #note numpy writes complex numbers like 0.+0.70710678j
+    print(reconstructed_vector) 
     
-    # for gate in gates:
-    #     print(state)
-    #     print("Applying {}".format(gate))
-    #     gate.apply(state)
-    #     reconstructed_vector = np.zeros(2**qubits, dtype=np.complex)
-    #     for i, t in enumerate(itertools.product([0,1], repeat=qubits)):
-    #         print(t, MeasurementOutcome(np.array(t, dtype=np.uint8)).apply(state))
-    #         reconstructed_vector[i] = MeasurementOutcome(np.array(t, dtype=np.uint8)).apply(state)
-    #     tol = 1e-14
-    #     reconstructed_vector.real[abs(reconstructed_vector.real) < tol] = 0.0
-    #     reconstructed_vector.imag[abs(reconstructed_vector.imag) < tol] = 0.0
-    #     print(reconstructed_vector)
-    # print(state)
-    # sim = qk.QiskitSimulator()
-    # qk_vector = sim.run(qubits, vector, CompositeGate(gates))
-    # qk_vector.real[abs(qk_vector.real) < tol] = 0.0
-    # qk_vector.imag[abs(qk_vector.imag) < tol] = 0.0
-
-    # print(qk_vector) 
+    #we can project our state onto the positive eigenspace of Z0 (i.e. multiply by |0><0| * I * I)
+    #the first argument of the PauliZProjector is the target qubit, the second is the power a in P = (I + (-1)^a Z)/2,
+    state1 = state1 | PauliZProjector(0,0)
+    print(state1)
     
-    
-    for vector, circuit in zip( random.choices(list(itertools.product(range(2), repeat=qubits)), k=N),
-                                util.random_clifford_circuits_with_z_projectors(qubits=qubits, depth=depth, N=N)):
-        state = StabState.basis(s=vector)
-        
-        sim = qk.QiskitSimulator()
-        state | circuit #project onto <0| on the zeroth qubit (apply 1/2 (I + (-1)**0 Z_0))
-        
-        reconstructed_vector = np.zeros(2**qubits, dtype=np.complex)
-        for i, t in enumerate(itertools.product([0,1], repeat=qubits)):
-            #i = int(sum([digit*2**k  for k,digit in enumerate(t)]))
-            reconstructed_vector[i] = MeasurementOutcome(np.array(t, dtype=np.uint8)).apply(state)
-        sim = qk.QiskitSimulator()
+    #and compute the overlaps again
+    reconstructed_vector = np.zeros(2**(state1.N), dtype=np.complex)
+    for i, t in enumerate(itertools.product([0,1], repeat=state1.N)):
+        reconstructed_vector[i] = state1 | MeasurementOutcome(np.array(t, dtype=np.uint8)) 
 
-        tol = 1e-14
-        reconstructed_vector.real[abs(reconstructed_vector.real) < tol] = 0.0
-        reconstructed_vector.imag[abs(reconstructed_vector.imag) < tol] = 0.0
+    #should be (very close to) [0.70710678, 0., 0., 0., 0., 0., 0 0.]
+    print(reconstructed_vector) 
 
-        qk_vector = sim.run(qubits, vector, circuit)
-        qk_vector.real[abs(qk_vector.real) < tol] = 0.0
-        qk_vector.imag[abs(qk_vector.imag) < tol] = 0.0
-
-        if (reconstructed_vector - qk_vector).conjugate() @ (reconstructed_vector - qk_vector) > 10e-10:
-            print(vector)
-            print(circuit)
-            print(reconstructed_vector)
-            print(qk_vector)
-            print(abs(reconstructed_vector - qk_vector))
-            break
-        
-        
-        #print(state.F[0] * state.v *state.phase)
-
-    #sim = qk.QiskitSimulator()
-
-    #job = sim.run([0,0], HGate(0) | CXGate(control=0,target=1))
-    #print(job)    
-
-
-    

@@ -108,6 +108,7 @@ class StabState:
         """
         qubitNumberStrLen = None
         s = ""
+        
         for i, (Fr, Gr, Mr, gr, vr, sr) in enumerate(zip(self.F, self.G, self.M, self.g, self.v, self.s)):
             if i == 0:
                 s = str(self.N) + " "
@@ -120,3 +121,11 @@ class StabState:
                 s += " " + str(self.phase)
             s += "\n"
         return s
+
+    def delete_qubit(self, k):
+        mask = np.ones(self.N,dtype=bool)
+        mask[k] = False
+        mask2d = np.outer(mask,mask)
+        
+        return StabState(self.N-1, self.A[mask2d].reshape(self.N-1, self.N-1), self.B[mask2d].reshape(self.N-1, self.N-1), self.C[mask2d].reshape(self.N-1, self.N-1), self.g[mask], self.v[mask],self.s[mask], self.phase)
+        

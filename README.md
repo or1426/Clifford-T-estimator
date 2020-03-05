@@ -6,8 +6,9 @@ Phase sensitive Clifford simulator - implementation of https://arxiv.org/abs/180
 * constants.py - useful numerical constants
 * stabstate.py defines the StabState class for holding and manipulating a stabaliser state in CH form
 * cliffords.py - defines the basic Clifford gates
-* measurement.py - defines MeasurementOutcome class for computing overlaps
-* util.py - printing utils
+* measurement.py - defines MeasurementOutcome class for computing overlaps and PauliZProjector class
+* qk.py - contains a class to translate between our work and the qiskit statevector_simulator for testing purposes - requires qiskit to be installed
+* util.py - utility functions
 
 # Usage
 ## Construct computational basis states
@@ -74,3 +75,8 @@ We can also use the `__or__` pipe notation to apply gates to a MeasurementOutcom
 state | (gate | bra) == state | gate | bra == (state | gate) | bra,
 ```
 where the first equality may be slightly wrong due to numerical precision and the second equality is because python evaluates expressions from the left to the right.
+
+## Projectors
+The `PauliZProjector` class works exactly the same as the Clifford unitaries
+`PauliZProjector(0,1)` - constructs a projector onto the |1><1|-eigenspace of the Pauli z projector on qubit 0
+`state | PauliZProjector(0,1)` - projects the state onto the |0><0|-eigenspace of the Pauli z operator on qubit 1

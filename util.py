@@ -112,7 +112,11 @@ def desuperpositionise(t, u, d, v):
             b = 1
             c = 0
             phase *= complex(1,-1)/np.sqrt(2)
-
+    if k != 0 and k != 1 and k != 2 and k != 3:
+        print(k)
+        print(k.dtype)
+        print(d)
+        
     s = y
     s[q] = c
     v[q] =  b % 2 

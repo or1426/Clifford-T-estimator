@@ -198,3 +198,34 @@ class CompositeGate(CliffordGate):
 
     def __str__(self):
         return "[" + ", ".join([gate.__str__() for gate in self.gates]) + "]"
+
+
+class SwapGate(CTypeCliffordGate):
+    """
+    Swaps qubits a and b
+    Can be implemented as three CNOTS but just swapping the elements of our matrices and vectors is more efficient
+    """
+    def __init__(self, a, b):
+        self.a = a
+        self.b = b
+        
+    def leftMultiplyC(self, state: StabState) -> StabState:
+        permutation = list(range(state.N))
+        permutation[self.a] = self.b
+        permutation[self.b] = self.a
+
+        state.A = state.A[permutation][:,permutation]
+        state.B = state.B[permutation][:,permutation]
+        state.C = state.C[permutation][:,permutation]
+        state.g = state.g[permutation]
+        state.v = state.v[permutation]
+        state.s = state.s[permutation]
+        
+        return state
+        
+    def rightMultiplyC(self, state: StabState) -> StabState:
+        state.v = state.v[permutation]
+        state.s = state.s[permutation]
+        return state
+    def data(self):
+        return "SWAP", self.a, self.b 
