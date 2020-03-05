@@ -1,7 +1,7 @@
 # pscs
 Phase sensitive Clifford simulator - implementation of https://arxiv.org/abs/1808.00128 section 4.1
 
-## Only tested in Python 3.8.1
+**Only tested in Python 3.8.1**
 
 ## files
 * pccs.py - examples of usage in `__name__ == "__main__"`
