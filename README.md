@@ -13,9 +13,9 @@ Phase sensitive Clifford simulator - implementation of https://arxiv.org/abs/180
 # Usage
 ## Construct computational basis states
 
-Using the `StabState.basis` class method, pass either `N` an int, to construct the state |0...0> on n qubits, or `s`, a length N, one dimensional numpy array of `0`s and `1`s with `dtype=np.uint8` to construct the basis state given by that binary vector (e.g. `np.array([1,0,1], dtype=np,uint8)` becomes |101> = |1>|0>|1>). If both `N` and `s` are passed then `s` is truncated or extended (from the back) to length `N` as appropriate.
+Using the `StabState.basis` class method, pass either `N` an int, to construct the state |0...0⟩ on n qubits, or `s`, a length N, one dimensional numpy array of `0`s and `1`s with `dtype=np.uint8` to construct the basis state given by that binary vector (e.g. `np.array([1,0,1], dtype=np,uint8)` becomes |101> = |1⟩|0⟩|1⟩). If both `N` and `s` are passed then `s` is truncated or extended (from the back) to length `N` as appropriate.
 
-The data of the stabiliser state is accessed through the properties `A`, `B`, `C` (equivalent to F, `G`, `M`, respectively), `g` (equivalently `gamma`), `v`, `s` and `w` (equivalently `phase`). A stabiliser state can be converted to a "pretty" string by the `toStr` method and pretty-printed through the `print` function. For example
+The data of the stabiliser state is accessed through the properties `A`, `B`, `C` (equivalent to F, `G`, `M`, respectively), `g` (equivalently `gamma`), `v`, `s` and `w` (equivalently `phase`). A stabiliser state can be converted to a "pretty" string by the `__str__` method and printed through the `print` function. For example
 ```
 state1 = StabState.basis(3) | HGate(0) | CXGate(target=1, control=0)
 print(state1)
@@ -39,7 +39,7 @@ The standard Clifford unitaries S, H, CX, and CZ are constructed by passing thei
 
 ## Apply and compose Clifford unitaries
 
-Of course we can apply unitaries to a state, the `__or__` operator has been overloaded for this to provide syntax similar to unix pipes. `gate.apply(state)` is equivalent to `state | gate`, if state is a vector |v>, and the gate a unitary U then both result in U|v>. Note that the apply method (and pipe operator) both change the state in place, and return it so
+Of course we can apply unitaries to a state, the `__or__` operator has been overloaded for this to provide syntax similar to unix pipes. `gate.apply(state)` is equivalent to `state | gate`, if state is a vector |v⟩, and the gate a unitary U then both result in U|v⟩. Note that the apply method (and pipe operator) both change the state in place, and return it so
 ```
 s1 = StabState.basis(1)
 s2 = s1 | HGate(0)
