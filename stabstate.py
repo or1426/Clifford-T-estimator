@@ -100,7 +100,31 @@ class StabState:
 
     def _rowToStr(row):
         return "".join(map(str,row))
-    
+
+    def tab(self):
+        """
+        pretty "to string" method for small qubit numbers
+        prints blocks F G M gamma v s
+        with headings to indicate which is which
+        """
+        
+        s  = str(self.N) + " "
+        qubitNumberStrLen = len(s)
+        matrix_width = self.N
+        half_matrix_width = self.N//2
+        s = "N" + " "*(qubitNumberStrLen -1 + half_matrix_width) + "F" + " "*matrix_width + "G" + " "*matrix_width + "M" + " "*(matrix_width-half_matrix_width) + "g v s w\n" + s
+        
+        for i, (Fr, Gr, Mr, gr, vr, sr) in enumerate(zip(self.F, self.G, self.M, self.g, self.v, self.s)):
+            if i != 0:
+                s += " "*qubitNumberStrLen
+            s += StabState._rowToStr(Fr) + " " + StabState._rowToStr(Gr) + " " + StabState._rowToStr(Mr) + " " + str(gr) + " " + str(vr) + " " + str(sr)
+
+            if i == 0:
+                s += " " + str(self.phase)
+            s += "\n"
+        return s
+
+        
     def __str__(self):
         """
         pretty "to string" method for small qubit numbers
