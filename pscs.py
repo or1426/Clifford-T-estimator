@@ -17,7 +17,7 @@ if __name__ == "__main__":
     np.set_printoptions(linewidth=128) #makes printing long matrices a bit better sometimes
     
     #produce the 3 qubit |000>
-    state1 = StabState.basis(N=10)
+    state1 = StabState.basis(N=3)
 
     #produce the 2 qubit |01>
     state2 = StabState.basis(s=[0,1])
