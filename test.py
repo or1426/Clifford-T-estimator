@@ -9,107 +9,117 @@ from cliffords import SGate, CXGate, CZGate, HGate, CompositeGate, SwapGate
 import itertools                    
 import util
 import random
-import qk
+
+from copy import deepcopy
 
 def eq(a,b,e=1e-10):
     return linalg.norm(reconstructed_vector1 - reconstructed_vector2) < 10e-10
     
-
+def basisTuple(n, *args):
+    v = [0]*n
+    for arg in args:
+        v[arg] = 1
+    return tuple(v)
+        
 from numpy import linalg
 
 if __name__ == "__main__":
-    #state = StabState.basis(s=[0,0]) # generate a state |00>
-    #state = state | HGate(0) | CXGate(target=1, control=0) #pass it through a Hadamard and a CNOT
+    code = 3
+    magic = 3
 
-    #state.__str__ method prints N F G M gamma v s omega
-    #N is a number (number of qubits), F G and M are block matrices, gamma, v and s are column vectors and omega is a complex number
-    #this is all the information required to describe the state
-    #print(state)
+    #state = StabState.basis(code+magic) # 3 code and 3 magic qubits
+
+    circ1 = HGate(1) | CXGate(target=0,control=1) | SGate(2) | HGate(2)
+    circ2 = HGate(1) | CXGate(target=2,control=0) | HGate(0) | CZGate(target=0, control=1)
+
+    states = {} # form a dictionary, this will store the state we get out with each choice of y
+    for y in itertools.product(range(2), repeat=magic): #we iterate over all 8 tuples (a,b,c) where a, b and c are 0 or 1
+        states[y] = StabState.basis(code+magic)
+        states[y] | circ1
+
+        for t in range(magic): # each magic qubit gets an H
+            states[y] | HGate(code+t)
+        for t, val in enumerate(y): # if y_i = 1 we get an S 
+            if val == 1:
+                states[y] | SGate(code+t)
+        for t in range(magic): # each magic qubit gets a cnot to its code qubit
+            states[y] | CXGate(control=t, target=code+t)
+
+        states[y] | circ2
+        
+        #maybe we want to try putting the projectors in here
+        #states[y] = states[y] | PauliZProjector(code, a=0)
+        #states[y] = states[y] | PauliZProjector(code+1, a=0)
+        #states[y] = states[y] | PauliZProjector(code+2, a=0)
+    
+
+    derivs = {}
+    for t in range(magic): # compute all first derivatives
+        derivs[(t, )] = (states[basisTuple(magic,t)] - states[basisTuple(magic)]) 
+
+        
+    for t1, t2 in itertools.product(range(magic),repeat=2): # compute all second derivatives
+        derivs[(t1,t2)] = states[basisTuple(magic, t1,t2)] - states[basisTuple(magic, t1)] - states[basisTuple(magic,t2)] + states[basisTuple(magic)]
+
+
+    #now choose a y in {0,1}^magic
+    #if there are 0, 1 or 2 ones, the approximation should be exact, if there are three we hope it still works
+    y = [0]*magic
+    y[0] = 1
+    y[1] = 1
+    y[2] = 1
+    y = tuple(y)
+
+
+    #compute the actual state given y
+    state = StabState.basis(code+magic)
+    state | circ1
+    for t in range(magic):
+        state | HGate(code+t)
+    for t, val in enumerate(y):
+        if val == 1:
+            state | SGate(code+t)
+    for t in range(magic):
+        state | CXGate(control=t, target=code+t)
+        
+    state | circ2
+    #if we did the projections above we should do them here
+    #state | PauliZProjector(code, a=0)
+    #state | PauliZProjector(code+1, a=0)
+    #state | PauliZProjector(code+2, a=0)
+
+    #compute the quadradic approximation of state(y)
+    approx = states[basisTuple(magic)] # this is state(000)
+    for i1,i2 in itertools.product(range(magic), repeat=2):
+        if i1 == i2: 
+            if y[i1] == 1:
+                approx = approx + derivs[(i1,)]
+        elif i1 > i2:
+            if y[i1] == 1 and y[i2] == 1:
+                approx = approx + derivs[(i1,i2)]
+    print("Actual state:")
+    print(state.tab())
+    print("Quadratic approximation:")
+    print(approx.tab())
+    print("Difference")
+    print((state-approx).tab())
+
+    #where do the F matrices differ?
+    print("Differences in F")
+    print(np.uint8(state.F != approx.F))
 
     
-    #for t in itertools.product([0,1], repeat=2):
-    #   print(t, state | MeasurementOutcome(np.array(t, dtype=np.uint8))) # print out the overlaps with <00|, <01|, <10| and <11
 
-    #generate some random computational basis states, some random Clifford circuits and apply them 
-    qubits, depth, N = 5, 100, 1000
-    np.set_printoptions(linewidth=100)
-    sketch = 0
-    zero = 0
-    equal12 = 0
-    n12 = 0
-    equal23 = 0 
-    n23 = 0
-    equal31 = 0
-    n31 = 0
-    for i, (vector, circuit) in enumerate(zip(random.choices(list(itertools.product(range(2), repeat=qubits)), k=N),
-                               util.random_clifford_circuits(qubits=qubits, depth=depth, N=N))):
+    reconstructed_vector1 = np.zeros(2**(code+magic), dtype=np.complex)
+    for i, t in enumerate(itertools.product([0,1], repeat=code+magic)):
+        reconstructed_vector1[i] = MeasurementOutcome(np.array(t, dtype=np.uint8)).apply(state)
+
+    reconstructed_vector2 = np.zeros(2**(code+magic), dtype=np.complex)
+    for i, t in enumerate(itertools.product([0,1], repeat=code+magic)):
+        reconstructed_vector2[i] = MeasurementOutcome(np.array(t, dtype=np.uint8)).apply(approx)
         
-        #print(i)
-        #a, b = random.sample(range(qubits), 2)
-        #projector = PauliZProjector(random.choice(range(qubits)), random.choice([0,1]))]
-        projector = PauliZProjector(0,0)
-        #print(projector)
-        state = StabState.basis(s=vector) | circuit | projector
-
-        reconstructed_vector1 = np.zeros(2**qubits, dtype=np.complex)
-        for i, t in enumerate(itertools.product([0,1], repeat=qubits)):
-           reconstructed_vector1[i] = MeasurementOutcome(np.array(t, dtype=np.uint8)).apply(state)
-
-        
-        if state.phase > 10e-10: #we don't care if the state is just 0
-            if not ((state.s == 0) & (state.v == 0)).any() and not ((~state.v%2)  * state.s).sum() > 1:
-                print(state.tab())
-                sketch += 1
-            else :
-                if ((~state.v % 2) * state.s).sum() > 1: 
-                    # we have two qubits with v == 0 and s == 1
-                    #we will apply a cnot between them, giving us a qubit with v == 0 and s == 0
-                    #and cancel out this cnot by putting exactly the same one in UC
-                    p, q = np.flatnonzero((~state.v % 2) * state.s)[:2]
-                    CXGate(p,q).rightMultiplyC(state)
-                    state.s[p] = 0
-                if ((state.s == 0) & (state.v == 0)).any():    
-                    p = np.flatnonzero((state.s == 0) & (state.v == 0))[0]
-                    if p != projector.target:
-                        swap = CompositeGate([CXGate(p, projector.target), CXGate(projector.target, p), CXGate(p, projector.target)])
-                        permutation = list(range(qubits))
-                        permutation[p] = projector.target
-                        permutation[projector.target] = p
-                        
-                        state.v = state.v[permutation]
-                        state.s = state.s[permutation]
-        
-                        for gate in swap.gates:
-                            gate.rightMultiplyC(state)
-                            
-            reconstructed_vector2 = np.zeros(2**qubits, dtype=np.complex)
-            for i, t in enumerate(itertools.product([0,1], repeat=qubits)):
-                reconstructed_vector2[i] = MeasurementOutcome(np.array(t, dtype=np.uint8)).apply(state)
-            state = state.delete_qubit(projector.target)
-            reconstructed_vector3 = np.zeros(2**(qubits), dtype=np.complex)
-            for i, t in enumerate(itertools.product([0,1], repeat=qubits)):
-               if t[projector.target] == projector.a:
-                   t2 = t[:projector.target] + t[projector.target+1:]
-                   reconstructed_vector3[i] = MeasurementOutcome(np.array(t2, dtype=np.uint8)).apply(state)
-
-            if eq(reconstructed_vector1, reconstructed_vector2):
-                equal12 += 1
-            else:
-                n12 +=1
-            if eq(reconstructed_vector2, reconstructed_vector3):
-                equal23 += 1
-            else:
-                n23 +=1
-            if eq(reconstructed_vector3, reconstructed_vector1):
-                equal31 += 1
-            else:
-                n31 +=1            
-        
-        else:
-            zero += 1
-
-    print("zeros: ", zero)
-    print("sketch: ", sketch)
-    print("1 == 2:", equal12, n12)
-    print("2 == 2:", equal23, n23)
-    print("3 == 1:", equal31, n31)
+    #these are long so just print out the first elements
+    print("First element of computational basis state vectors:")
+    print("    Actual: ", reconstructed_vector1[0])
+    print("    Quadradic approximaion: ",reconstructed_vector2[0])
+    
