@@ -153,3 +153,25 @@ class StabState:
         
         return StabState(self.N-1, self.A[mask2d].reshape(self.N-1, self.N-1), self.B[mask2d].reshape(self.N-1, self.N-1), self.C[mask2d].reshape(self.N-1, self.N-1), self.g[mask], self.v[mask],self.s[mask], self.phase)
         
+
+
+    def __sub__(self,other):
+        return StabState(self.N,
+                         (self.A - other.A)%np.uint8(2),
+                         (self.B - other.B)%np.uint8(2),
+                         (self.C - other.C)%np.uint8(2),
+                         (self.g - other.g)%np.uint8(4),
+                         (self.v - other.v)%np.uint8(2),
+                         (self.s - other.s)%np.uint8(2),
+                         (self.phase / other.phase))
+
+    def __add__(self,other):
+        return StabState(self.N,
+                         (self.A + other.A)%np.uint8(2),
+                         (self.B + other.B)%np.uint8(2),
+                         (self.C + other.C)%np.uint8(2),
+                         (self.g + other.g)%np.uint8(4),
+                         (self.v + other.v)%np.uint8(2),
+                         (self.s + other.s)%np.uint8(2),
+                         (self.phase * other.phase))
+
