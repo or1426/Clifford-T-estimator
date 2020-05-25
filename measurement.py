@@ -3,6 +3,8 @@ from stabstate import StabState
 import constants
 import cliffords
 import util 
+from agstate import AGState
+from copy import deepcopy
 
 class MeasurementOutcome(cliffords.CliffordGate):
     def __init__(self, x: np.ndarray, gates=None): # if gates is not None its a list of Clifford unitaries we apply to the state before computing the overlap 
@@ -42,6 +44,29 @@ class MeasurementOutcome(cliffords.CliffordGate):
             return phase * np.power(2, -(state.v.sum()/2.)) * state.phase
     def __str__(self):
         return "<" + "".join(self.x) + "|"
+
+    def applyAG(self, state: AGState) -> complex:
+        for gate in self.gates:
+            gate.applyAG(state)
+
+        cpy = deepcopy(state)
+        for i, val in enumerate(self.x):
+            if val:
+                cliffords.XGate(i).applyAG(cpy)
+                
+        cpy.gausStab()
+        
+        s = 0
+        for i in range(cpy.N, 2*cpy.N):
+            if cpy.r[i] == 1 and cpy.x[i].sum() == 0:
+                return 0
+            else:
+                if  cpy.x[i].sum() > 0:
+                    s += 1
+                
+        
+        return (1/np.sqrt(2))**s
+
 
 class PauliZProjector(cliffords.CliffordGate):
     """

@@ -21,13 +21,13 @@ class StabState:
         """
         if N == None and s is None:
             #given no input we assume a single qubit in state |0>
-            return cls(N=2,
-                       A=np.eye(2, dtype=np.uint8),
-                       B=np.eye(2, dtype=np.uint8),
-                       C=np.zeros((2,2), dtype=np.uint8),
-                       g=np.zeros(N, dtype=np.uint8),
-                       v=np.zeros(2, dtype=np.uint8),
-                       s=np.zeros(2, dtype=np.uint8),
+            return cls(N=1,
+                       A=np.eye(1, dtype=np.uint8),
+                       B=np.eye(1, dtype=np.uint8),
+                       C=np.zeros((1,1), dtype=np.uint8),
+                       g=np.zeros(1, dtype=np.uint8),
+                       v=np.zeros(1, dtype=np.uint8),
+                       s=np.zeros(1, dtype=np.uint8),
                        phase = complex(1,0)
             )
         elif N != None and s is None:

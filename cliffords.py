@@ -2,8 +2,11 @@ from __future__ import annotations
 import numpy as np
 from abc import ABC, abstractmethod
 from stabstate import StabState
+from agstate import AGState
 import constants
 import measurement
+
+
 
 import util
 
@@ -15,6 +18,10 @@ class CliffordGate(ABC): #abstract base class
     def apply(self, state : StabState):
         pass
 
+    @abstractmethod
+    def applyAG(self, state: AGState):
+        pass
+
     
 class UnitaryCliffordGate(CliffordGate):
     # given a state that looks like
@@ -23,6 +30,9 @@ class UnitaryCliffordGate(CliffordGate):
     # G (w UC UH) |s>
     @abstractmethod
     def apply(self, state : StabState) -> StabState:
+        pass
+    @abstractmethod
+    def applyAG(self, state: AGState) ->AGState:
         pass
 
     def __or__(self, other: CliffordGate) -> CliffordGate:
@@ -83,6 +93,35 @@ class SGate(CTypeCliffordGate):
     def data(self):
         return "S", self.target
 
+    def applyAG(self, state : AGState) -> AGState:
+        state.r = state.r ^ (state.x[:,self.target]*state.z[:,self.target])
+        state.z[:,self.target] = state.z[:,self.target] ^ state.x[:,self.target]
+        return state
+
+class XGate(UnitaryCliffordGate):
+    """
+    X gate applied to qubit target
+    """
+    def __init__(self, target: int):
+        self.target = target
+
+
+    def apply(self, state : StabState) -> StabState:
+        alpha = np.uint8((state.G[self.target]*(1-state.v)*state.s).sum() % np.uint8(2))
+        state.s = np.uint8(state.s + state.G[self.target]*state.v % np.uint8(2))
+        state.phase *= (-1)**alpha
+        
+        return state
+    def applyAG(self, state : AGState) -> AGState:
+        state.r = state.r ^ state.z[:,self.target]
+        return state
+
+    def __str__(self):
+        return "X({})".format(self.target)
+    def data(self):
+        return "X", self.target
+
+        
 class CXGate(CTypeCliffordGate):
     """
     CX gate with target and control 
@@ -102,6 +141,13 @@ class CXGate(CTypeCliffordGate):
         state.B[self.target] = state.B[self.target] ^ state.B[self.control] 
         state.A[self.control] = state.A[self.control] ^ state.A[self.target]
         state.C[self.control] = state.C[self.control] ^ state.C[self.target]
+        return state
+
+    def applyAG(self, state : AGState) -> AGState:
+        state.r = (state.r + (state.x[:,self.control]*state.z[:,self.target]) * ((state.x[:,self.target]+state.z[:,self.control]+np.uint8(1)) %np.uint8(2)))%np.uint8(2)
+        state.x[:,self.target] = state.x[:,self.target] ^ state.x[:,self.control]
+        state.z[:,self.control] = state.z[:,self.control] ^ state.z[:,self.target]
+        
         return state
 
     def __str__(self):
@@ -126,6 +172,11 @@ class CZGate(CTypeCliffordGate):
         state.C[self.control] = state.C[self.control] ^ state.B[self.target]
         state.C[self.target] = state.C[self.target] ^ state.B[self.control]
         return state
+
+    def applyAG(self, state: AGState) -> AGState:
+        return HGate(self.target).applyAG(CXGate(self.target, self.control).applyAG(HGate(self.target).applyAG(state)))
+
+    
     def __str__(self):
         return "CZ({}, {})".format(self.target, self.control)
     
@@ -161,7 +212,13 @@ class HGate(UnitaryCliffordGate):
                 gate.rightMultiplyC(state)
             
             return state
+
+    def applyAG(self, state : AGState) -> AGState:
+        state.r = (state.r + state.x[:,self.target]*state.z[:,self.target]) % np.uint8(2)
+        state.x[:,self.target], state.z[:,self.target] = state.z[:,self.target].copy(), state.x[:,self.target].copy()
         
+        return state
+    
     def __str__(self):
         return "H({})".format(self.target)
 
@@ -182,6 +239,11 @@ class CompositeGate(CliffordGate):
     def apply(self, state: StabState) -> StabState:
         for gate in self.gates:
             gate.apply(state)
+        return state
+    
+    def applyAG(self, state: AGState) -> AGState:
+        for gate in self.gates:
+            gate.applyAG(state)
         return state
 
     def __or__(self, other: CliffordGate) -> CliffordGate:
@@ -227,5 +289,9 @@ class SwapGate(CTypeCliffordGate):
         state.v = state.v[permutation]
         state.s = state.s[permutation]
         return state
+
+    def applyAG(self, state: AGState) -> AGState:
+        return CXGate(self.a, self.b).applyAG(CXGate(self.b, self.a).applyAG(CXGate(self.a, self.b).applyAG(state)))
+    
     def data(self):
         return "SWAP", self.a, self.b 
