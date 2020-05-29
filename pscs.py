@@ -5,7 +5,7 @@ import numpy as np
 from measurement import MeasurementOutcome, PauliZProjector
 from chstate import CHState
 import constants
-from cliffords import SGate, CXGate, CZGate, HGate, CompositeGate, SwapGate
+from gates.cliffords import SGate, CXGate, HGate
 import itertools                    
 import util
 import random
@@ -71,8 +71,8 @@ if __name__ == "__main__":
     
     #we can project our state onto the positive eigenspace of Z0 (i.e. multiply by |0><0| * I * I)
     #the first argument of the PauliZProjector is the target qubit, the second is the power a in P = (I + (-1)^a Z)/2,
-    state1 = state1 | PauliZProjector(0,0)
-    print(state1)
+    #state1 = state1 | PauliZProjector(0,0)
+    #print(state1)
     
     #and compute the overlaps again
     reconstructed_vector = np.zeros(2**(state1.N), dtype=np.complex)

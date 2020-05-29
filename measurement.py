@@ -1,12 +1,12 @@
 import numpy as np
 from chstate import CHState
 import constants
-import cliffords
+import gates 
 import util 
 from agstate import AGState
 from copy import deepcopy
 
-class MeasurementOutcome(cliffords.CliffordGate):
+class MeasurementOutcome(gates.cliffords.CliffordGate):
     def __init__(self, x: np.ndarray, gates=None): # if gates is not None its a list of Clifford unitaries we apply to the state before computing the overlap 
         self.x = np.uint8(x)
         if gates == None:
@@ -68,7 +68,7 @@ class MeasurementOutcome(cliffords.CliffordGate):
         return (1/np.sqrt(2))**s
 
 
-class PauliZProjector(cliffords.CliffordGate):
+class PauliZProjector(gates.cliffords.CliffordGate):
     """
     Class to model a projector of the form 
     (1/2) * (I + (-1)^a Z_target)

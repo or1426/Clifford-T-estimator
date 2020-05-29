@@ -6,8 +6,6 @@ from agstate import AGState
 import constants
 import measurement
 
-
-
 import util
 
 class CliffordGate(ABC): #abstract base class
