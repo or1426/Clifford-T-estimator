@@ -1,16 +1,18 @@
 #! /usr/bin/env python3
+
 from __future__ import annotations
 
 import numpy as np
+
 from measurement import MeasurementOutcome, PauliZProjector
-from stabstate import StabState
+from chstate import CHState
 import constants
 from cliffords import SGate, CXGate, CZGate, HGate, CompositeGate, SwapGate
 import itertools                    
 import util
 import random
-import qk
-
+import time
+from copy import deepcopy
 import factoring
 
 from numpy import linalg
@@ -25,78 +27,70 @@ def eq(a,b,eps=1e-10):
 
 if __name__ == "__main__":
     #how many qubits, clifford gates and overall iterations in our test
-    qubits, depth, N = 10, 10, 100
 
-    #our algorithm has two phases
-    #first we "fix" the state so that the first column of the F matrix is of the form 10...0 (1 followed by all zeros)
-    #then we just chop off the first qubit from our ch-form
+    depth, N = 100, 100
+    qubits = np.array(range(5,10,1), dtype=np.int)
     
-    #we count how many times the phase was zero, because we don't really care about this case (the whole state-vector is just zero)
-    zero = 0
-    #how many times our "fixed" state matches the original one
-    eq12 = 0
-    #and doesn't
-    neq12 = 0
-    #how many times our "fixed" and chopped down state matches the original
-    eq13 = 0
-    #and doesn't
-    neq13 = 0
+    #apply_time = np.zeros_like(qubits, dtype=np.float)
+    #project_time = np.zeros_like(qubits, dtype=np.float)
+    #factor_time = np.zeros_like(qubits, dtype=np.float)
+    #factor_time2 = np.zeros_like(qubits, dtype=np.float)
+    nonzeros = np.zeros_like(qubits, dtype=np.int)
+    bad = np.zeros_like(qubits, dtype=np.int)
+    good = np.zeros_like(qubits, dtype=np.int)
     
-    for i, (vector, circuit) in enumerate(zip(random.choices(list(itertools.product(range(2), repeat=qubits)), k=N), util.random_clifford_circuits(qubits=qubits, depth=depth, N=N))):
-        #vector is a randomly length n vector of bits (used as the initial s vector of our state)
-        #circuit is a length "depth" list of random Clifford gates
-        
-        #if i % 100 == 0:
-        print(i)
-        #form an projector onto the 0 state of the zeroth qubit
-        projector = PauliZProjector(0,0)
-        #form a state by passing our initial state through the random Clifford circuit and then apply the projector
-        state = StabState.basis(s=vector) | circuit | projector
+    for count, q in enumerate(qubits):
+        print(q)
+        for vector, circuit in zip(np.random.randint(2, size=(N,q)), util.random_clifford_circuits(qubits=q, depth=depth, N=N)):
+            projector = PauliZProjector(0,0)
 
-        #we don't do anything else if it turned out our state was orthogonal to the support of the projector
-        if abs(state.phase) > 10e-10:
-            #compute the inner product with all 2**n computational basis states
-            reconstructed_vector1 = np.zeros(2**qubits, dtype=np.complex)
-            for i, t in enumerate(itertools.product([0,1], repeat=qubits)):
-                reconstructed_vector1[i] = MeasurementOutcome(np.array(t, dtype=np.uint8)).apply(state)
-
-            #apply the first part of our algorithm
-            #attempt to simplify the state so the first column of F is 10...0
-            #empirically this always works - but I have not proved this!!!
-            factoring.gaussian_eliminate(state)
-            print(state.tab())
-            #compute the inner products again to make sure we only did "allowed" operations
-            #i.e. we should have changed the CH-form but not any of the inner products
-            reconstructed_vector2 = np.zeros(2**qubits, dtype=np.complex)
-            for i, t in enumerate(itertools.product([0,1], repeat=qubits)):
-                reconstructed_vector2[i] = MeasurementOutcome(np.array(t, dtype=np.uint8)).apply(state)
-            
-            if eq(reconstructed_vector1, reconstructed_vector2):
-                eq12 += 1
-            else:
-                neq12 += 1
-            #now delete the zeroth qubit from our CH-form (delete the zeroth row and column of F, G and M, as well as the zeroth element of g, v, s)
-            state2 = state.delete_qubit(0)
-            #compute the computational-basis inner products again
-            #note that we are still using a length 2**n vector
-            reconstructed_vector3 = np.zeros(2**(qubits), dtype=np.complex)
+            #form a state by passing our initial state through the random Clifford circuit and then apply the projector
+            #t0 = time.perf_counter()
+            state = CHState.basis(s=vector) | circuit
+            #t1 = time.perf_counter()
+            state = state | projector        
+            #t2 = time.perf_counter()
+            #we don't do anything else if it turned out our state was orthogonal to the support of the projector
+            if abs(state.phase) > 10e-10:                    
+                state2 = deepcopy(state)
+                #t3 = time.perf_counter()
                 
-            for i, t in enumerate(itertools.product([0,1], repeat=qubits)):
-                #only update elements of the vector which correspond to the half of the CB vectors with qubit zero in state zero
-                if t[projector.target] == projector.a:
-                    t2 = t[:projector.target] + t[projector.target+1:]
-                    reconstructed_vector3[i] = MeasurementOutcome(np.array(t2, dtype=np.uint8)).apply(state2)
-                    
-            if eq(reconstructed_vector1, reconstructed_vector3):
-                eq13 += 1
-            else:
-                neq13 += 1
-                
-        else:
-            zero += 1
+                nonzeros[count] += 1
+                factoring.gaussian_eliminate(state)
+                #t4 = time.perf_counter()
 
-    print("zeros:", zero)
-    print("1 == 2: ", eq12)
-    print("1 != 2: ", neq12)
-    print("1 == 3: ", eq13)
-    print("1 != 3: ", neq13)
+                factoring.reduce_column(state2,0)
+
+                reconstructed_vector1 = np.zeros(2**q, dtype=np.complex)
+                for i, t in enumerate(itertools.product([0,1], repeat=q)):
+                    reconstructed_vector1[i] = MeasurementOutcome(np.array(t, dtype=np.uint8)).apply(state)
+
+                reconstructed_vector2 = np.zeros(2**q, dtype=np.complex)
+                for i, t in enumerate(itertools.product([0,1], repeat=q)):
+                    reconstructed_vector2[i] = MeasurementOutcome(np.array(t, dtype=np.uint8)).apply(state2)
+
+                if not eq(reconstructed_vector1, reconstructed_vector2):
+                    bad[count] += 1
+                else:
+                    good[count] += 1 
+                #t5 = time.perf_counter()
+               
+                
+                #apply_time[i] += t1-t0
+                #project_time[i] += t2-t1
+                #factor_time[i] += t4-t3
+                #factor_time2[i] += t5-t4
+    print(nonzeros)
+    print(good)
+    print(bad)
+    # from matplotlib import pyplot as plt
+
+    # plt.plot(qubits, apply_time/nonzeros, label="apply time",color="r")
+    # plt.plot(qubits, project_time/nonzeros, label="project time",color="b")
+    # plt.plot(qubits, factor_time/nonzeros, label="factor time",color="g")
+    # plt.plot(qubits, factor_time2/nonzeros, "--", label="factor time 2", color="g")
+
+    # plt.yscale("log")
+    # plt.legend()
+    # plt.grid()
+    # plt.show()

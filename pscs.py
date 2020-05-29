@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import numpy as np
 from measurement import MeasurementOutcome, PauliZProjector
-from stabstate import StabState
+from chstate import CHState
 import constants
 from cliffords import SGate, CXGate, CZGate, HGate, CompositeGate, SwapGate
 import itertools                    
@@ -17,13 +17,13 @@ if __name__ == "__main__":
     np.set_printoptions(linewidth=128) #makes printing long matrices a bit better sometimes
     
     #produce the 3 qubit |000>
-    state1 = StabState.basis(N=3)
+    state1 = CHState.basis(N=3)
 
     #produce the 2 qubit |01>
-    state2 = StabState.basis(s=[0,1])
+    state2 = CHState.basis(s=[0,1])
 
     #produce the 3 qubit |111>
-    state3 = StabState.basis(s=[1,1,1])
+    state3 = CHState.basis(s=[1,1,1])
 
     #print state1 in the form N F G M gamma v s w
     #where N is number of qubits, F, G, M and NxN matrices, gamma, v and s are column vectors and w is a complex number
@@ -34,7 +34,7 @@ if __name__ == "__main__":
       001 001 000 0 0 0
     """
     print(state1)
-    #the StabState.tab method prints out the same information as a table
+    #the CHState.tab method prints out the same information as a table
     #i.e. with column headings indicating which block is which
     print(state1.tab())
 

@@ -11,7 +11,7 @@ class AGState:
     r : np.ndarray
     
     @classmethod
-    def basis(cls, N:int = None, s=None) -> StabState:
+    def basis(cls, N:int = None, s=None) -> AGState:
         if N == None and s == None:
             return cls(1, np.eye(2,1,dtype=np.uint8), np.eye(2,1,-1,dtype=np.uint8), np.zeros(2, dtype=np.uint8))
         elif N != None and s == None:
@@ -147,7 +147,8 @@ class AGState:
                         self.rowsum(m, i)
                 i = i+1
 
-
+    def __or__(self, other : CliffordGate):
+        return other.applyAG(self)
 
 
 

@@ -78,7 +78,7 @@ def desuperpositionise(t, u, d, v):
     a, b, c = None, None, None
     phase = complex(0,1)**w * np.sqrt(2)
 
-    #is therre a better way to write this?
+    #is there a better way to write this?
     if v[q] == 0:
         b = 1
         if k == 0:
@@ -130,7 +130,7 @@ def desuperpositionise(t, u, d, v):
 
 def random_clifford_circuits(qubits, depth, N):
     #some Clifford gate constructors take two params and some take 1
-    params_dict = {cliffords.CXGate: 2, cliffords.HGate: 1, cliffords.SGate: 1, cliffords.CZGate: 2} 
+    params_dict = {cliffords.SGate: 1, cliffords.CZGate: 2,cliffords.CXGate: 2,cliffords.HGate:1} 
     for _ in range(N):
         gates = random.choices(list(params_dict.keys()), k=depth)
         yield cliffords.CompositeGate([gate(*random.sample(range(qubits), k=params_dict[gate])) for gate in gates])
@@ -138,3 +138,40 @@ def random_clifford_circuits(qubits, depth, N):
 def random_clifford_circuits_with_z_projectors(qubits, depth, N):
     for target, a, circuit in zip(random.choices(range(qubits), k=N), random.choices(range(1), k=N), random_clifford_circuits(qubits, depth, N)):
         yield circuit | measurement.PauliZProjector(target,a)
+
+        
+def rref(mat):
+    m,n = mat.shape
+    
+    h = 0 #/* Initialization of the pivot row */
+    k = 0 #/* Initialization of the pivot column */
+
+    while h < n and k < m:
+        #Find the k-th pivot
+        #look in column h for a pivot in a row we haven't been to yet
+        fnz = np.flatnonzero( (mat[:,h] == 1))
+        fnz = fnz[fnz >= k]
+        if len(fnz) == 0:
+            #No pivot in this column, pass to next column
+            h = h+1
+        else:
+            pivot = fnz[0]
+            if pivot != k:
+                mat[[pivot,k]] = mat[[k,pivot]]            
+            #for each row after the pivot
+            for i in range(k + 1, n):
+                if mat[i][h]:
+                    mat[i] = (mat[i] + mat[k])%np.uint8(2)
+            #Increase pivot row and column
+            h = h + 1
+            k = k + 1
+            
+    for q in range(n):
+        #find leading 1
+        fnz = np.flatnonzero(mat[q]) # find non-zero elements in row q
+        if len(fnz) > 0:
+            h = fnz[0] #grab the first one, now all elements in this column, below this should be made zero
+            for j in range(q):
+                if mat[j][h]:
+                    mat[j] = (mat[j] + mat[q])% np.uint8(2)
+    return mat

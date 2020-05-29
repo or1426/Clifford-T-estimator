@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 
 @dataclass
-class StabState:
+class CHState:
     N : int # number of qubits
     A : np.ndarray # NxN matrix of bytes (we are using as bits) partly determines U_C
     B : np.ndarray # NxN matrix of bytes (we are using as bits) partly determines U_C
@@ -15,7 +15,7 @@ class StabState:
     phase : complex #initial phase
 
     @classmethod
-    def basis(cls, N:int = None, s=None) -> StabState:
+    def basis(cls, N:int = None, s=None) -> CHState:
         """
         Return a computational basis state defined by the bitstring s
         """
@@ -60,9 +60,9 @@ class StabState:
             # if N > len(s) we extend s by adding zeros at the end and proceed as before
             s = np.array(s, dtype=np.uint8)
             if N <= len(s):
-                return StabState.basis(N=None, s = s[:N])
+                return CHState.basis(N=None, s = s[:N])
             else:
-                return StabState.basis(N=None, s = np.concatenate((s, np.zeros(N-len(s), dtype=np.uint8))))  
+                return CHState.basis(N=None, s = np.concatenate((s, np.zeros(N-len(s), dtype=np.uint8))))  
 
     @property
     def F(self):
@@ -117,7 +117,7 @@ class StabState:
         for i, (Fr, Gr, Mr, gr, vr, sr) in enumerate(zip(self.F, self.G, self.M, self.g, self.v, self.s)):
             if i != 0:
                 s += " "*qubitNumberStrLen
-            s += StabState._rowToStr(Fr) + " " + StabState._rowToStr(Gr) + " " + StabState._rowToStr(Mr) + " " + str(gr) + " " + str(vr) + " " + str(sr)
+            s += CHState._rowToStr(Fr) + " " + CHState._rowToStr(Gr) + " " + CHState._rowToStr(Mr) + " " + str(gr) + " " + str(vr) + " " + str(sr)
 
             if i == 0:
                 s += " " + str(self.phase)
@@ -139,7 +139,7 @@ class StabState:
                 qubitNumberStrLen = len(s)
             if i != 0:
                 s += " "*qubitNumberStrLen
-            s += StabState._rowToStr(Fr) + " " + StabState._rowToStr(Gr) + " " + StabState._rowToStr(Mr) + " " + str(gr) + " " + str(vr) + " " + str(sr)
+            s += CHState._rowToStr(Fr) + " " + CHState._rowToStr(Gr) + " " + CHState._rowToStr(Mr) + " " + str(gr) + " " + str(vr) + " " + str(sr)
 
             if i == 0:
                 s += " " + str(self.phase)
@@ -151,12 +151,12 @@ class StabState:
         mask[k] = False
         mask2d = np.outer(mask,mask)
         
-        return StabState(self.N-1, self.A[mask2d].reshape(self.N-1, self.N-1), self.B[mask2d].reshape(self.N-1, self.N-1), self.C[mask2d].reshape(self.N-1, self.N-1), self.g[mask], self.v[mask],self.s[mask], self.phase)
+        return CHState(self.N-1, self.A[mask2d].reshape(self.N-1, self.N-1), self.B[mask2d].reshape(self.N-1, self.N-1), self.C[mask2d].reshape(self.N-1, self.N-1), self.g[mask], self.v[mask],self.s[mask], self.phase)
         
 
 
     def __sub__(self,other):
-        return StabState(self.N,
+        return CHState(self.N,
                          (self.A - other.A)%np.uint8(2),
                          (self.B - other.B)%np.uint8(2),
                          (self.C - other.C)%np.uint8(2),
@@ -166,7 +166,7 @@ class StabState:
                          (self.phase / other.phase))
 
     def __add__(self,other):
-        return StabState(self.N,
+        return CHState(self.N,
                          (self.A + other.A)%np.uint8(2),
                          (self.B + other.B)%np.uint8(2),
                          (self.C + other.C)%np.uint8(2),

@@ -1,5 +1,5 @@
 import numpy as np
-from stabstate import StabState
+from chstate import CHState
 import constants
 import cliffords
 import util 
@@ -15,7 +15,7 @@ class MeasurementOutcome(cliffords.CliffordGate):
     #given out outcome <v|, where v is a binary vector of length 2^n
     #and an n-qubit stabiliser state w UC UH |s> = 
     #calculate <v|s>
-    def apply(self, state: StabState) -> complex:
+    def apply(self, state: CHState) -> complex:
         for gate in self.gates:
             gate.apply(state)
 
@@ -82,7 +82,7 @@ class PauliZProjector(cliffords.CliffordGate):
     Applying a projector to a state results in a "state" which is not normalised
     the normalisation factor will be kept in the phase of the stabaliser state
     """
-    def apply(self, state: StabState) -> StabState:
+    def apply(self, state: CHState) -> CHState:
         #apply commutation rules to get (1/2) (1+ (-1)^a Z_p) UC UH |s> = (1/2) UC UH (1 + (-1)^a (prod_j Z_j^{G_{pj} (1-v_j)} X_j^{G_{pj}^{v_j}}  )) |s>
         #then we apply the unitaries to |s> to get 
         # UC UH (|s> + (-1)^(k+a) |t>)

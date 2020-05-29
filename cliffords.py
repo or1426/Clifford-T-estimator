@@ -1,7 +1,7 @@
 from __future__ import annotations
 import numpy as np
 from abc import ABC, abstractmethod
-from stabstate import StabState
+from chstate import CHState
 from agstate import AGState
 import constants
 import measurement
@@ -15,7 +15,7 @@ class CliffordGate(ABC): #abstract base class
     base class for both UnitaryCliffordGate and MeasurementOutcome
     """
     @abstractmethod
-    def apply(self, state : StabState):
+    def apply(self, state : CHState):
         pass
 
     @abstractmethod
@@ -29,7 +29,7 @@ class UnitaryCliffordGate(CliffordGate):
     # compute the CH form of the state state
     # G (w UC UH) |s>
     @abstractmethod
-    def apply(self, state : StabState) -> StabState:
+    def apply(self, state : CHState) -> CHState:
         pass
     @abstractmethod
     def applyAG(self, state: AGState) ->AGState:
@@ -54,7 +54,7 @@ class CTypeCliffordGate(UnitaryCliffordGate): #abstract base class
     # compute the CH form of the state state
     # w (UC G) UH |s>
     @abstractmethod
-    def rightMultiplyC(self, state : StabState) -> StabState:
+    def rightMultiplyC(self, state : CHState) -> CHState:
         pass
 
     # given a state that looks like
@@ -62,12 +62,12 @@ class CTypeCliffordGate(UnitaryCliffordGate): #abstract base class
     # compute the CH form of the state state
     # w (G UC) UH |s>
     @abstractmethod
-    def leftMultiplyC(self, state : StabState) -> StabState:
+    def leftMultiplyC(self, state : CHState) -> CHState:
         pass
 
     #applying C type gates is easy
     #just left-multiply it on to UC
-    def apply(self, state : StabState) -> StabState:
+    def apply(self, state : CHState) -> CHState:
         self.leftMultiplyC(state)
         return state
     
@@ -78,12 +78,12 @@ class SGate(CTypeCliffordGate):
     def __init__(self, target: int):
         self.target = target
 
-    def rightMultiplyC(self, state : StabState) -> StabState:
+    def rightMultiplyC(self, state : CHState) -> CHState:
         state.C[:,self.target] = state.C[:, self.target] ^ state.A[:, self.target]
         state.g = np.uint8(state.g - state.A[:, self.target]) % constants.UNSIGNED_4
         return state
 
-    def leftMultiplyC(self, state : StabState) -> StabState:
+    def leftMultiplyC(self, state : CHState) -> CHState:
         state.C[self.target] = state.C[self.target] ^ state.B[self.target]
         state.g[self.target] = (state.g[self.target] + np.uint8(3)) % constants.UNSIGNED_4
         return state
@@ -106,7 +106,7 @@ class XGate(UnitaryCliffordGate):
         self.target = target
 
 
-    def apply(self, state : StabState) -> StabState:
+    def apply(self, state : CHState) -> CHState:
         alpha = np.uint8((state.G[self.target]*(1-state.v)*state.s).sum() % np.uint8(2))
         state.s = np.uint8(state.s + state.G[self.target]*state.v % np.uint8(2))
         state.phase *= (-1)**alpha
@@ -130,13 +130,13 @@ class CXGate(CTypeCliffordGate):
         self.target = target
         self.control = control
         
-    def rightMultiplyC(self, state: StabState) -> StabState:
+    def rightMultiplyC(self, state: CHState) -> CHState:
         state.B[:,self.control] = state.B[:,self.control] ^ state.B[:,self.target]
         state.A[:,self.target] = state.A[:,self.target] ^ state.A[:,self.control]
         state.C[:,self.control] = state.C[:,self.control] ^ state.C[:,self.target]
         return state
     
-    def leftMultiplyC(self, state: StabState) -> StabState:
+    def leftMultiplyC(self, state: CHState) -> CHState:
         state.g[self.control] = (state.g[self.control] + state.g[self.target] + np.uint8(2) * (state.C[self.control] @ state.A[self.target] )) % constants.UNSIGNED_4
         state.B[self.target] = state.B[self.target] ^ state.B[self.control] 
         state.A[self.control] = state.A[self.control] ^ state.A[self.target]
@@ -163,12 +163,12 @@ class CZGate(CTypeCliffordGate):
     def __init__(self, target: int, control: int):
         self.target = target
         self.control = control
-    def rightMultiplyC(self, state: StabState) -> StabState:
+    def rightMultiplyC(self, state: CHState) -> CHState:
         state.C[:,self.control] = state.C[:,self.control] ^ state.A[:,self.target]
         state.C[:,self.target] = state.C[:,self.target] ^ state.A[:,self.control]
         state.g = (state.g + 2 * state.A[:,self.control] * state.A[:,self.target]) % constants.UNSIGNED_4
         return state
-    def leftMultiplyC(self, state: StabState) -> StabState:
+    def leftMultiplyC(self, state: CHState) -> CHState:
         state.C[self.control] = state.C[self.control] ^ state.B[self.target]
         state.C[self.target] = state.C[self.target] ^ state.B[self.control]
         return state
@@ -191,7 +191,7 @@ class HGate(UnitaryCliffordGate):
     def __init__(self, target: int):
         self.target = target
 
-    def apply(self, state: StabState) -> StabState:
+    def apply(self, state: CHState) -> CHState:
         t = state.s ^ (state.B[self.target]* state.v) 
         u = (state.s ^ (state.A[self.target]*np.uint8(1-state.v)) ^ (state.C[self.target]*state.v)) 
         alpha = (state.B[self.target]*np.uint8(1-state.v)*state.s).sum()
@@ -236,7 +236,7 @@ class CompositeGate(CliffordGate):
         else:
             self.gates = gates
 
-    def apply(self, state: StabState) -> StabState:
+    def apply(self, state: CHState) -> CHState:
         for gate in self.gates:
             gate.apply(state)
         return state
@@ -271,7 +271,7 @@ class SwapGate(CTypeCliffordGate):
         self.a = a
         self.b = b
         
-    def leftMultiplyC(self, state: StabState) -> StabState:
+    def leftMultiplyC(self, state: CHState) -> CHState:
         permutation = list(range(state.N))
         permutation[self.a] = self.b
         permutation[self.b] = self.a
@@ -285,7 +285,7 @@ class SwapGate(CTypeCliffordGate):
         
         return state
         
-    def rightMultiplyC(self, state: StabState) -> StabState:
+    def rightMultiplyC(self, state: CHState) -> CHState:
         state.v = state.v[permutation]
         state.s = state.s[permutation]
         return state
