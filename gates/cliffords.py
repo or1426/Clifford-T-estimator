@@ -1,52 +1,40 @@
 from __future__ import annotations
-import numpy as np
 from abc import ABC, abstractmethod
+import numpy as np
+
 from chstate import CHState
 from agstate import AGState
 import constants
-import measurement
+
+import gates.base
 
 import util
-
-class CliffordGate(ABC): #abstract base class
-    """
-    base class for both UnitaryCliffordGate and MeasurementOutcome
-    """
-    @abstractmethod
-    def apply(self, state : CHState):
-        pass
-
-    @abstractmethod
-    def applyAG(self, state: AGState):
-        pass
-
     
-class UnitaryCliffordGate(CliffordGate):
+class CliffordGate(gates.base.ComposableGate):
     # given a state that looks like
     # w UC UH |s>
     # compute the CH form of the state state
     # G (w UC UH) |s>
     @abstractmethod
-    def apply(self, state : CHState) -> CHState:
+    def applyCH(self, state : CHState) -> CHState:
         pass
     @abstractmethod
-    def applyAG(self, state: AGState) ->AGState:
+    def applyAG(self, state: AGState) -> AGState:
         pass
-
-    def __or__(self, other: CliffordGate) -> CliffordGate:
-        if isinstance(other, measurement.MeasurementOutcome):
-            other.gates.insert(0, self)
+    
+    def __or__(self, other: Gate) -> Gate:
+        if isinstance(self, gates.base.CompositeGate) and isinstance(other, gates.base.CompositeGate):
+            self.gates.extend(other)
+            return self
+        elif isinstance(other, gates.base.CompositeGate):
+            other.gates.insert(0,self) # keep composite gates flat - we don't really want composite gates containing composite gates 
             return other
-        elif isinstance(other, CompositeGate):
-            other.gates.insert(0,self) # keep composite gates flat - we don't really want composite gates containing composite gates - note we also overide __or__ in CompositeGate
-            return other
+        elif isinstance(other, CliffordGate):
+            return CompositeCliffordGate([self, other])
         else:
-            return CompositeGate([self, other])
-    @abstractmethod
-    def data(self):
-        pass
+            return gates.base.CompositeGate([self, other])
         
-class CTypeCliffordGate(UnitaryCliffordGate): #abstract base class
+class CTypeCliffordGate(CliffordGate): #abstract base class
     # given a state that looks like
     # w UC UH |s>
     # compute the CH form of the state state
@@ -65,7 +53,7 @@ class CTypeCliffordGate(UnitaryCliffordGate): #abstract base class
 
     #applying C type gates is easy
     #just left-multiply it on to UC
-    def apply(self, state : CHState) -> CHState:
+    def applyCH(self, state : CHState) -> CHState:
         self.leftMultiplyC(state)
         return state
     
@@ -96,7 +84,7 @@ class SGate(CTypeCliffordGate):
         state.z[:,self.target] = state.z[:,self.target] ^ state.x[:,self.target]
         return state
 
-class XGate(UnitaryCliffordGate):
+class XGate(CliffordGate):
     """
     X gate applied to qubit target
     """
@@ -104,7 +92,7 @@ class XGate(UnitaryCliffordGate):
         self.target = target
 
 
-    def apply(self, state : CHState) -> CHState:
+    def applyCH(self, state : CHState) -> CHState:
         alpha = np.uint8((state.G[self.target]*(1-state.v)*state.s).sum() % np.uint8(2))
         state.s = np.uint8(state.s + state.G[self.target]*state.v % np.uint8(2))
         state.phase *= (-1)**alpha
@@ -182,14 +170,14 @@ class CZGate(CTypeCliffordGate):
         return "CZ", self.target, self.control
 
     
-class HGate(UnitaryCliffordGate):
+class HGate(CliffordGate):
     """
     Hadamard gate with target
     """
     def __init__(self, target: int):
         self.target = target
 
-    def apply(self, state: CHState) -> CHState:
+    def applyCH(self, state: CHState) -> CHState:
         t = state.s ^ (state.B[self.target]* state.v) 
         u = (state.s ^ (state.A[self.target]*np.uint8(1-state.v)) ^ (state.C[self.target]*state.v)) 
         alpha = (state.B[self.target]*np.uint8(1-state.v)*state.s).sum()
@@ -224,7 +212,7 @@ class HGate(UnitaryCliffordGate):
         return "H", self.target
 
         
-class CompositeGate(CliffordGate):
+class CompositeCliffordGate(CliffordGate):
     """
     just stores a list of gates and applies them one by one in its apply method
     """
@@ -234,27 +222,15 @@ class CompositeGate(CliffordGate):
         else:
             self.gates = gates
 
-    def apply(self, state: CHState) -> CHState:
+    def applyCH(self, state: CHState) -> CHState:
         for gate in self.gates:
-            gate.apply(state)
+            gate.applyCH(state)
         return state
     
     def applyAG(self, state: AGState) -> AGState:
         for gate in self.gates:
             gate.applyAG(state)
         return state
-
-    def __or__(self, other: CliffordGate) -> CliffordGate:
-        if isinstance(other, measurement.MeasurementOutcome):
-            other.gates = self.gates + other.gates
-            return other
-        elif isinstance(other, CompositeGate):
-            # keep composite gates flat - we don't really want composite gates containing composite gates
-            #note we also check for isinstance(other, CompositeGate) in CliffordGate.__or__
-            self.gates.extend(other.gates)
-        else:
-            self.gates.append(other)
-        return self
 
     def __str__(self):
         return "[" + ", ".join([gate.__str__() for gate in self.gates]) + "]"
@@ -293,3 +269,47 @@ class SwapGate(CTypeCliffordGate):
     
     def data(self):
         return "SWAP", self.a, self.b 
+
+class PauliZProjector(CliffordGate):
+    """
+    Class to model a projector of the form 
+    (1/2) * (I + (-1)^a Z_target)
+    where a is an integer and Z_q is the unitiary applying Pauli Z to qubit q and identity to all other qubits
+    """
+    def __init__(self, target:int, a:int):
+        self.target = target
+        self.a = a 
+
+    """
+    Applying a projector to a state results in a "state" which is not normalised
+    the normalisation factor will be kept in the phase of the stabaliser state
+    """
+    def applyCH(self, state: CHState) -> CHState:
+        #apply commutation rules to get (1/2) (1+ (-1)^a Z_p) UC UH |s> = (1/2) UC UH (1 + (-1)^a (prod_j Z_j^{G_{pj} (1-v_j)} X_j^{G_{pj}^{v_j}}  )) |s>
+        #then we apply the unitaries to |s> to get 
+        # UC UH (|s> + (-1)^(k+a) |t>)
+        k = self.a + (state.B[self.target] * np.uint8(1 + state.v) * state.s).sum(dtype=np.uint8) % np.uint8(2)
+        t = np.uint8((state.B[self.target] * state.v) ^ state.s)
+
+        if all(t == state.s):
+            state.phase *= (1 + (-1)**k)/2
+        else:
+            phase, VCList, v, s = util.desuperpositionise(state.s, t, np.uint8(2*k % constants.UNSIGNED_4), state.v)
+            for gate in VCList:
+                gate.rightMultiplyC(state)
+                
+            state.phase *= phase / 2 # 2 since P = (I +- Z)/2
+            state.v = v
+            state.s = s
+        return state
+
+    def applyAG(self, state: AGState) -> AGState:
+        #TODO
+        raise NotImplementedError
+        
+    def __str__(self):
+        return "Pz({}, {})".format(self.target, self.a)
+
+    def data(self):
+        return "PZ", self.target, self.a
+    

@@ -1,2 +1,2 @@
 from .base import Gate, TGate
-import cliffords
+from .cliffords import SGate, CXGate, CZGate, HGate, CompositeCliffordGate, SwapGate, PauliZProjector

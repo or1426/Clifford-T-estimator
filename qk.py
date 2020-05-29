@@ -2,7 +2,7 @@ import qiskit
 from qiskit import QuantumCircuit
 from qiskit.providers.aer import QasmSimulator
 from qiskit import Aer
-import cliffords
+from gates import cliffords
 
 import numpy as np
 

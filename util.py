@@ -1,6 +1,6 @@
 import numpy as np
 import constants
-import cliffords
+from gates import cliffords
 import random
 import measurement
 
