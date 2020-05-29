@@ -3,17 +3,19 @@ from __future__ import annotations
 
 import numpy as np
 from measurement import MeasurementOutcome, PauliZProjector
-from stabstate import StabState
+from chstate import CHState
 import constants
 from cliffords import SGate, CXGate, CZGate, HGate, CompositeGate, SwapGate
 import itertools                    
 import util
 import random
+import factoring
+import qk
 
 from copy import deepcopy
 
 def eq(a,b,e=1e-10):
-    return linalg.norm(reconstructed_vector1 - reconstructed_vector2) < 10e-10
+    return linalg.norm(a - b) < e
     
 def basisTuple(n, *args):
     v = [0]*n
@@ -26,15 +28,16 @@ from numpy import linalg
 if __name__ == "__main__":
     code = 3
     magic = 3
-
-    #state = StabState.basis(code+magic) # 3 code and 3 magic qubits
+    qubits = code+magic
+    #state = CHState.basis(code+magic) # 3 code and 3 magic qubits
 
     circ1 = HGate(1) | CXGate(target=0,control=1) | SGate(2) | HGate(2)
     circ2 = HGate(1) | CXGate(target=2,control=0) | HGate(0) | CZGate(target=0, control=1)
-
+    #circ2 = CXGate(target=2,control=0) | CZGate(target=0, control=1)
+    
     states = {} # form a dictionary, this will store the state we get out with each choice of y
     for y in itertools.product(range(2), repeat=magic): #we iterate over all 8 tuples (a,b,c) where a, b and c are 0 or 1
-        states[y] = StabState.basis(code+magic)
+        states[y] = CHState.basis(code+magic)
         states[y] | circ1
 
         for t in range(magic): # each magic qubit gets an H
@@ -46,13 +49,38 @@ if __name__ == "__main__":
             states[y] | CXGate(control=t, target=code+t)
 
         states[y] | circ2
+
         
+        for i in range(qubits):
+            if states[y].s[i] == 1 and states[y].v[i] == 1:
+                states[y].s[i] = 0
+                SGate(i).rightMultiplyC(SGate(i).rightMultiplyC(states[y]))
+
+        
+        #reconstructed_vector = np.zeros(2**qubits, dtype=np.complex)
+        #for i, t in enumerate(itertools.product([0,1], repeat=qubits)):
+        #    reconstructed_vector[i] = MeasurementOutcome(np.array(t, dtype=np.uint8)).apply(states[y])
+    
+        
+        #sim = qk.QiskitSimulator()
+        #qk_vector = sim.run(qubits, np.zeros_like(states[y].s), circ1 |HGate(3)|HGate(4)| HGate(5)|CXGate(3,0)|CXGate(4,1)| CXGate(5,2) |circ2)
+        #print(reconstructed_vector)
+        #print(qk_vector)
+
+        #print(eq(reconstructed_vector,qk_vector))
+        #break
+
+    
+    
         #maybe we want to try putting the projectors in here
         #states[y] = states[y] | PauliZProjector(code, a=0)
         #states[y] = states[y] | PauliZProjector(code+1, a=0)
         #states[y] = states[y] | PauliZProjector(code+2, a=0)
     
-
+    for y in states.keys():
+        print("y = ", y)
+        print(states[y].tab())
+        
     derivs = {}
     for t in range(magic): # compute all first derivatives
         derivs[(t, )] = (states[basisTuple(magic,t)] - states[basisTuple(magic)]) 
@@ -60,8 +88,10 @@ if __name__ == "__main__":
         
     for t1, t2 in itertools.product(range(magic),repeat=2): # compute all second derivatives
         derivs[(t1,t2)] = states[basisTuple(magic, t1,t2)] - states[basisTuple(magic, t1)] - states[basisTuple(magic,t2)] + states[basisTuple(magic)]
-
-
+        
+    #for key in derivs.keys():
+    #    print(key)
+    #    print(derivs[key])
     #now choose a y in {0,1}^magic
     #if there are 0, 1 or 2 ones, the approximation should be exact, if there are three we hope it still works
     y = [0]*magic
@@ -72,7 +102,7 @@ if __name__ == "__main__":
 
 
     #compute the actual state given y
-    state = StabState.basis(code+magic)
+    state = CHState.basis(code+magic)
     state | circ1
     for t in range(magic):
         state | HGate(code+t)
