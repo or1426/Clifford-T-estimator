@@ -14,7 +14,7 @@ class QiskitSimulator(object):
         self.backend = Aer.get_backend("statevector_simulator") #QasmSimulator({"method": "statevector_"})
         ##self.backend_options = {"method": "stabilizer"}
 
-    def run(self, num_qubits, state, composite: cliffords.CompositeGate):
+    def run(self, num_qubits, state, composite: cliffords.CompositeCliffordGate):
         circuit = QuantumCircuit(len(state)) 
         #first flip all the bits for which state is 1
 

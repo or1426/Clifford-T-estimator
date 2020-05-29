@@ -96,7 +96,7 @@ class CHState:
         self.phase = c
 
     def __or__(self, other : CliffordGate):
-        return other.apply(self)
+        return other.applyCH(self)
 
     def _rowToStr(row):
         return "".join(map(str,row))

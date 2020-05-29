@@ -6,18 +6,14 @@ import util
 from agstate import AGState
 from copy import deepcopy
 
-class MeasurementOutcome(gates.cliffords.CliffordGate):
-    def __init__(self, x: np.ndarray, gates=None): # if gates is not None its a list of Clifford unitaries we apply to the state before computing the overlap 
+class MeasurementOutcome(gates.Gate):
+    def __init__(self, x: np.ndarray, gates=None): 
         self.x = np.uint8(x)
-        if gates == None:
-            self.gates = []
 
     #given out outcome <v|, where v is a binary vector of length 2^n
     #and an n-qubit stabiliser state w UC UH |s> = 
     #calculate <v|s>
     def apply(self, state: CHState) -> complex:
-        for gate in self.gates:
-            gate.apply(state)
 
         u = ( self.x @ state.A % 2 ) # u[j] stores the exponent of X_j (either 0 or 1)
 
@@ -62,47 +58,8 @@ class MeasurementOutcome(gates.cliffords.CliffordGate):
                 return 0
             else:
                 if  cpy.x[i].sum() > 0:
-                    s += 1
-                
+                    s += 1                
         
         return (1/np.sqrt(2))**s
 
 
-class PauliZProjector(gates.cliffords.CliffordGate):
-    """
-    Class to model a projector of the form 
-    (1/2) * (I + (-1)^a Z_target)
-    where a is an integer and Z_q is the unitiary applying Pauli Z to qubit q and identity to all other qubits
-    """
-    def __init__(self, target:int, a:int):
-        self.target = target
-        self.a = a 
-
-    """
-    Applying a projector to a state results in a "state" which is not normalised
-    the normalisation factor will be kept in the phase of the stabaliser state
-    """
-    def apply(self, state: CHState) -> CHState:
-        #apply commutation rules to get (1/2) (1+ (-1)^a Z_p) UC UH |s> = (1/2) UC UH (1 + (-1)^a (prod_j Z_j^{G_{pj} (1-v_j)} X_j^{G_{pj}^{v_j}}  )) |s>
-        #then we apply the unitaries to |s> to get 
-        # UC UH (|s> + (-1)^(k+a) |t>)
-        k = self.a + (state.B[self.target] * np.uint8(1 + state.v) * state.s).sum(dtype=np.uint8) % np.uint8(2)
-        t = np.uint8((state.B[self.target] * state.v) ^ state.s)
-
-        if all(t == state.s):
-            state.phase *= (1 + (-1)**k)/2
-        else:
-            phase, VCList, v, s = util.desuperpositionise(state.s, t, np.uint8(2*k % constants.UNSIGNED_4), state.v)
-            for gate in VCList:
-                gate.rightMultiplyC(state)
-                
-            state.phase *= phase / 2 # 2 since P = (I +- Z)/2
-            state.v = v
-            state.s = s
-        return state
-        
-    def __str__(self):
-        return "Pz({}, {})".format(self.target, self.a)
-
-    def data(self):
-        return "PZ", self.target, self.a
