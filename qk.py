@@ -17,7 +17,7 @@ class QiskitSimulator(object):
     def run(self, num_qubits, state, composite: cliffords.CompositeCliffordGate):
         circuit = QuantumCircuit(len(state)) 
         #first flip all the bits for which state is 1
-
+        
         for i, b in enumerate(state):
             if b:
                 circuit.x(i)

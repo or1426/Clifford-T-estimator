@@ -24,9 +24,21 @@ class CliffordGate(gates.base.ComposableGate):
     
     def __or__(self, other: Gate) -> Gate:
         if isinstance(self, gates.base.CompositeGate) and isinstance(other, gates.base.CompositeGate):
-            self.gates.extend(other)
+            self.gates.extend(other.gates)
             return self
         elif isinstance(other, gates.base.CompositeGate):
+            other.gates.insert(0,self) # keep composite gates flat - we don't really want composite gates containing composite gates 
+            return other
+        elif isinstance(self, gates.base.CompositeGate):
+            self.gates.append(other)
+            return self
+        elif isinstance(self, gates.CompositeCliffordGate) and isinstance(other, gates.CompositeCliffordGate):
+            self.gates.extend(other.gates)
+            return self
+        elif isinstance(self, gates.CompositeCliffordGate):
+            self.gates.append(other)
+            return self
+        elif isinstance(other, gates.CompositeGate):
             other.gates.insert(0,self) # keep composite gates flat - we don't really want composite gates containing composite gates 
             return other
         elif isinstance(other, CliffordGate):
@@ -178,8 +190,8 @@ class HGate(CliffordGate):
         self.target = target
 
     def applyCH(self, state: CHState) -> CHState:
-        t = state.s ^ (state.B[self.target]* state.v) 
-        u = (state.s ^ (state.A[self.target]*np.uint8(1-state.v)) ^ (state.C[self.target]*state.v)) 
+        t = state.s ^ (state.G[self.target]* state.v) 
+        u = (state.s ^ (state.F[self.target]*np.uint8(1-state.v)) ^ (state.M[self.target]*state.v)) 
         alpha = (state.B[self.target]*np.uint8(1-state.v)*state.s).sum()
         beta = (state.C[self.target]*np.uint8(1-state.v)*state.s + state.A[self.target]*state.v*(state.C[self.target] + state.s)).sum()
         

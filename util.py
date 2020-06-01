@@ -1,6 +1,6 @@
 import numpy as np
 import constants
-from gates import cliffords
+from gates import cliffords, TGate
 import random
 import measurement
 
@@ -133,11 +133,22 @@ def random_clifford_circuits(qubits, depth, N):
     params_dict = {cliffords.SGate: 1, cliffords.CZGate: 2,cliffords.CXGate: 2,cliffords.HGate:1} 
     for _ in range(N):
         gates = random.choices(list(params_dict.keys()), k=depth)
-        yield cliffords.CompositeGate([gate(*random.sample(range(qubits), k=params_dict[gate])) for gate in gates])
+        yield cliffords.CompositeCliffordGate([gate(*random.sample(range(qubits), k=params_dict[gate])) for gate in gates])
     
 def random_clifford_circuits_with_z_projectors(qubits, depth, N):
     for target, a, circuit in zip(random.choices(range(qubits), k=N), random.choices(range(1), k=N), random_clifford_circuits(qubits, depth, N)):
         yield circuit | measurement.PauliZProjector(target,a)
+
+def random_clifford_circuits_with_T(qubits, depth, N):
+    #some Clifford gate constructors take two params and some take 1
+    params_dict = {cliffords.SGate: 1, cliffords.CZGate: 2,cliffords.CXGate: 2,cliffords.HGate:1, TGate:1} 
+    count = 0
+    while count < N:
+        gates = random.choices(list(params_dict.keys()), k=depth)
+        t = len([g for g in gates if g == TGate])
+        if t > 0:
+            count += 1
+            yield t, cliffords.CompositeCliffordGate([gate(*random.sample(range(qubits), k=params_dict[gate])) for gate in gates])
 
         
 def rref(mat):
@@ -175,3 +186,23 @@ def rref(mat):
                 if mat[j][h]:
                     mat[j] = (mat[j] + mat[q])% np.uint8(2)
     return mat
+
+
+def sort_pauli_string(x,z):
+    """
+    Given nxn matrices x and z
+    representing a Pauli string
+    return the a (either 0 or 1) such that 
+    prod_j prod_k X_k^{x_{jk}} Z_k^{z_{jk}} = (-1)^a prod_k prod_j Z_k^{z_{jk}} X_k^{x_{jk}} 
+    note - order of product swapped and order of zs and xs flipped 
+    """
+    if len(z) == 0:
+        return 0
+
+    t = np.zeros_like(z[0])
+    sign = 0
+    for j in range(len(x)):
+        t = t ^ z[j]        
+        sign =  (sign + (t @ x[j])) % np.uint8(2)
+
+    return sign
