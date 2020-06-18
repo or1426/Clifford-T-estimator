@@ -2,10 +2,10 @@
 from __future__ import annotations
 
 import numpy as np
-from measurement import MeasurementOutcome, PauliZProjector
+from measurement import MeasurementOutcome
 from chstate import CHState
 import constants
-from gates.cliffords import SGate, CXGate, HGate
+from gates.cliffords import SGate, CXGate, HGate, PauliZProjector
 import itertools                    
 import util
 import random
@@ -45,12 +45,12 @@ if __name__ == "__main__":
     cnot = CXGate(0, 1)
 
     #apply h and cnot to state2 (in that order)
-    state2 = cnot.apply(h.apply(state2))
+    state2 = cnot.applyCH(h.applyCH(state2))
 
     #we can overlaps
     #for example here <01|state2>
     #should be -1/sqrt(2)
-    overlap = MeasurementOutcome([1,1]).apply(state2)
+    overlap = MeasurementOutcome([1,1]).applyCH(state2)
     print(overlap)
     
     #this is kinda hard to read so we can also write application in a way that looks more like a circuit

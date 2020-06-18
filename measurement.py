@@ -13,7 +13,7 @@ class MeasurementOutcome(gates.Gate):
     #given out outcome <v|, where v is a binary vector of length 2^n
     #and an n-qubit stabiliser state w UC UH |s> = 
     #calculate <v|s>
-    def apply(self, state: CHState) -> complex:
+    def applyCH(self, state: CHState) -> complex:
 
         u = ( self.x @ state.F % 2 ) # u[j] stores the exponent of X_j (either 0 or 1)
 
