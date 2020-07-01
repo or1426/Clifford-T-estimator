@@ -1,7 +1,7 @@
 from __future__ import annotations
 import numpy as np
 from dataclasses import dataclass
-
+import util
 
 @dataclass
 class CHState:
@@ -175,3 +175,51 @@ class CHState:
                          (self.s + other.s)%np.uint8(2),
                          (self.phase * other.phase))
 
+    def equatorial_inner_product(self, A):
+        """
+        Given an equatorial state |phi_A> defined by a symmetric binary matrix A
+        compute
+        <|phi_A | self >
+        """
+
+        print("A = ", A)
+        J = np.int64((self.M @ self.F.T) % np.uint8(2))
+        J[np.diag_indices_from(J)] = self.g
+
+        print("J = ", J)
+        
+        K = (self.G.T @ (A + J) @ self.G) 
+        print("K = ", K)
+        prefactor = (2**(-(self.N + self.v.sum())/2)) * ((1j)**(self.s @ K @ self.s)) * ((-1)**(self.s @ self.v))
+        print("pf = ", prefactor)
+        B = (K + 2*np.diag(self.s + self.s @ K))[self.v == 1][:,self.v == 1] % np.uint8(4)
+        print("B = ", B)
+        #M = np.triu(B) % np.uint8(2) #upper triangular part including diagonal
+        #M[np.diag_indices_from(M)] = np.uint8(0)
+        #print("M = ", M)
+        K = B[np.diag_indices_from(B)] % np.uint8(2)
+        print("K = ", K)
+        L = ((B[np.diag_indices_from(B)] - K) // np.uint8(2))  # the // forces integer division and makes sure the dtype remains uint8
+        print("L = ", L)
+
+        newL = np.append(L,0)
+
+        newM = np.triu((B +  np.outer(K,K)) %np.uint8(2))
+        newM[np.diag_indices_from(newM)] = np.uint8(0)
+        
+        newM = np.concatenate((newM, np.array([K],dtype=np.uint8)), axis=0)
+        newM = np.concatenate((newM, np.array([[0]*newM.shape[0]],dtype=np.uint8).T) ,  axis=1)
+        
+        re = util.z2ExponentialSum(newM, newL) / 2
+        newL[-1] = 1
+
+        print("newM = ", newM)
+        print("newL = ", newL)
+        
+        im = util.z2ExponentialSum(newM, newL) / 2
+        print("re = ", re, "im = ", im)
+        print(self.w.conjugate()*prefactor)
+        return self.w.conjugate()*prefactor*(re + 1.j *im)
+
+        
+        

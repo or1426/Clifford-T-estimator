@@ -2,8 +2,8 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 import numpy as np
 
-from chstate import CHState
-from agstate import AGState
+import chstate
+import agstate
 import constants
 
 import gates.base
@@ -16,10 +16,10 @@ class CliffordGate(gates.base.ComposableGate):
     # compute the CH form of the state state
     # G (w UC UH) |s>
     @abstractmethod
-    def applyCH(self, state : CHState) -> CHState:
+    def applyCH(self, state : chstate.CHState) -> chstate.CHState:
         pass
     @abstractmethod
-    def applyAG(self, state: AGState) -> AGState:
+    def applyAG(self, state: agstate.AGState) -> agstate.AGState:
         pass
     
     def __or__(self, other: Gate) -> Gate:
@@ -52,7 +52,7 @@ class CTypeCliffordGate(CliffordGate): #abstract base class
     # compute the CH form of the state state
     # w (UC G) UH |s>
     @abstractmethod
-    def rightMultiplyC(self, state : CHState) -> CHState:
+    def rightMultiplyC(self, state : chstate.CHState) -> chstate.CHState:
         pass
 
     # given a state that looks like
@@ -60,12 +60,12 @@ class CTypeCliffordGate(CliffordGate): #abstract base class
     # compute the CH form of the state state
     # w (G UC) UH |s>
     @abstractmethod
-    def leftMultiplyC(self, state : CHState) -> CHState:
+    def leftMultiplyC(self, state : chstate.CHState) -> chstate.CHState:
         pass
 
     #applying C type gates is easy
     #just left-multiply it on to UC
-    def applyCH(self, state : CHState) -> CHState:
+    def applyCH(self, state : chstate.CHState) -> chstate.CHState:
         self.leftMultiplyC(state)
         return state
     
@@ -76,12 +76,12 @@ class SGate(CTypeCliffordGate):
     def __init__(self, target: int):
         self.target = target
 
-    def rightMultiplyC(self, state : CHState) -> CHState:
+    def rightMultiplyC(self, state : chstate.CHState) -> chstate.CHState:
         state.C[:,self.target] = state.C[:, self.target] ^ state.A[:, self.target]
         state.g = np.uint8(state.g - state.A[:, self.target]) % constants.UNSIGNED_4
         return state
 
-    def leftMultiplyC(self, state : CHState) -> CHState:
+    def leftMultiplyC(self, state : chstate.CHState) -> chstate.CHState:
         state.C[self.target] = state.C[self.target] ^ state.B[self.target]
         state.g[self.target] = (state.g[self.target] + np.uint8(3)) % constants.UNSIGNED_4
         return state
@@ -91,7 +91,7 @@ class SGate(CTypeCliffordGate):
     def data(self):
         return "S", self.target
 
-    def applyAG(self, state : AGState) -> AGState:
+    def applyAG(self, state : agstate.AGState) -> agstate.AGState:
         state.r = state.r ^ (state.x[:,self.target]*state.z[:,self.target])
         state.z[:,self.target] = state.z[:,self.target] ^ state.x[:,self.target]
         return state
@@ -104,13 +104,13 @@ class XGate(CliffordGate):
         self.target = target
 
 
-    def applyCH(self, state : CHState) -> CHState:
+    def applyCH(self, state : chstate.CHState) -> chstate.CHState:
         alpha = np.uint8((state.G[self.target]*(1-state.v)*state.s).sum() % np.uint8(2))
         state.s = np.uint8(state.s + state.G[self.target]*state.v % np.uint8(2))
         state.phase *= (-1)**alpha
         
         return state
-    def applyAG(self, state : AGState) -> AGState:
+    def applyAG(self, state : agstate.AGState) -> agstate.AGState:
         state.r = state.r ^ state.z[:,self.target]
         return state
 
@@ -128,20 +128,20 @@ class CXGate(CTypeCliffordGate):
         self.target = target
         self.control = control
         
-    def rightMultiplyC(self, state: CHState) -> CHState:
+    def rightMultiplyC(self, state: chstate.CHState) -> chstate.CHState:
         state.B[:,self.control] = state.B[:,self.control] ^ state.B[:,self.target]
         state.A[:,self.target] = state.A[:,self.target] ^ state.A[:,self.control]
         state.C[:,self.control] = state.C[:,self.control] ^ state.C[:,self.target]
         return state
     
-    def leftMultiplyC(self, state: CHState) -> CHState:
+    def leftMultiplyC(self, state: chstate.CHState) -> chstate.CHState:
         state.g[self.control] = (state.g[self.control] + state.g[self.target] + np.uint8(2) * (state.C[self.control] @ state.A[self.target] )) % constants.UNSIGNED_4
         state.B[self.target] = state.B[self.target] ^ state.B[self.control] 
         state.A[self.control] = state.A[self.control] ^ state.A[self.target]
         state.C[self.control] = state.C[self.control] ^ state.C[self.target]
         return state
 
-    def applyAG(self, state : AGState) -> AGState:
+    def applyAG(self, state : agstate.AGState) -> agstate.AGState:
         state.r = (state.r + (state.x[:,self.control]*state.z[:,self.target]) * ((state.x[:,self.target]+state.z[:,self.control]+np.uint8(1)) %np.uint8(2)))%np.uint8(2)
         state.x[:,self.target] = state.x[:,self.target] ^ state.x[:,self.control]
         state.z[:,self.control] = state.z[:,self.control] ^ state.z[:,self.target]
@@ -161,17 +161,17 @@ class CZGate(CTypeCliffordGate):
     def __init__(self, target: int, control: int):
         self.target = target
         self.control = control
-    def rightMultiplyC(self, state: CHState) -> CHState:
+    def rightMultiplyC(self, state: chstate.CHState) -> chstate.CHState:
         state.C[:,self.control] = state.C[:,self.control] ^ state.A[:,self.target]
         state.C[:,self.target] = state.C[:,self.target] ^ state.A[:,self.control]
         state.g = (state.g + 2 * state.A[:,self.control] * state.A[:,self.target]) % constants.UNSIGNED_4
         return state
-    def leftMultiplyC(self, state: CHState) -> CHState:
+    def leftMultiplyC(self, state: chstate.CHState) -> chstate.CHState:
         state.C[self.control] = state.C[self.control] ^ state.B[self.target]
         state.C[self.target] = state.C[self.target] ^ state.B[self.control]
         return state
 
-    def applyAG(self, state: AGState) -> AGState:
+    def applyAG(self, state: agstate.AGState) -> agstate.AGState:
         return HGate(self.target).applyAG(CXGate(self.target, self.control).applyAG(HGate(self.target).applyAG(state)))
 
     
@@ -189,7 +189,7 @@ class HGate(CliffordGate):
     def __init__(self, target: int):
         self.target = target
 
-    def applyCH(self, state: CHState) -> CHState:
+    def applyCH(self, state: chstate.CHState) -> chstate.CHState:
         t = state.s ^ (state.G[self.target]* state.v) 
         u = (state.s ^ (state.F[self.target]*np.uint8(1-state.v)) ^ (state.M[self.target]*state.v)) 
         alpha = (state.B[self.target]*np.uint8(1-state.v)*state.s).sum()
@@ -211,7 +211,7 @@ class HGate(CliffordGate):
             
             return state
 
-    def applyAG(self, state : AGState) -> AGState:
+    def applyAG(self, state : agstate.AGState) -> agstate.AGState:
         state.r = (state.r + state.x[:,self.target]*state.z[:,self.target]) % np.uint8(2)
         state.x[:,self.target], state.z[:,self.target] = state.z[:,self.target].copy(), state.x[:,self.target].copy()
         
@@ -234,12 +234,12 @@ class CompositeCliffordGate(CliffordGate):
         else:
             self.gates = gates
 
-    def applyCH(self, state: CHState) -> CHState:
+    def applyCH(self, state: chstate.CHState) -> chstate.CHState:
         for gate in self.gates:
             gate.applyCH(state)
         return state
     
-    def applyAG(self, state: AGState) -> AGState:
+    def applyAG(self, state: agstate.AGState) -> agstate.AGState:
         for gate in self.gates:
             gate.applyAG(state)
         return state
@@ -257,7 +257,7 @@ class SwapGate(CTypeCliffordGate):
         self.a = a
         self.b = b
         
-    def leftMultiplyC(self, state: CHState) -> CHState:
+    def leftMultiplyC(self, state: chstate.CHState) -> chstate.CHState:
         permutation = list(range(state.N))
         permutation[self.a] = self.b
         permutation[self.b] = self.a
@@ -271,12 +271,12 @@ class SwapGate(CTypeCliffordGate):
         
         return state
         
-    def rightMultiplyC(self, state: CHState) -> CHState:
+    def rightMultiplyC(self, state: chstate.CHState) -> chstate.CHState:
         state.v = state.v[permutation]
         state.s = state.s[permutation]
         return state
 
-    def applyAG(self, state: AGState) -> AGState:
+    def applyAG(self, state: agstate.AGState) -> agstate.AGState:
         return CXGate(self.a, self.b).applyAG(CXGate(self.b, self.a).applyAG(CXGate(self.a, self.b).applyAG(state)))
     
     def data(self):
@@ -296,7 +296,7 @@ class PauliZProjector(CliffordGate):
     Applying a projector to a state results in a "state" which is not normalised
     the normalisation factor will be kept in the phase of the stabaliser state
     """
-    def applyCH(self, state: CHState) -> CHState:
+    def applyCH(self, state: chstate.CHState) -> chstate.CHState:
         #apply commutation rules to get (1/2) (1+ (-1)^a Z_p) UC UH |s> = (1/2) UC UH (1 + (-1)^a (prod_j Z_j^{G_{pj} (1-v_j)} X_j^{G_{pj}^{v_j}}  )) |s>
         #then we apply the unitaries to |s> to get 
         # UC UH (|s> + (-1)^(k+a) |t>)
@@ -315,7 +315,7 @@ class PauliZProjector(CliffordGate):
             state.s = s
         return state
 
-    def applyAG(self, state: AGState) -> AGState:
+    def applyAG(self, state: agstate.AGState) -> agstate.AGState:
         #TODO
         raise NotImplementedError
         

@@ -1,8 +1,9 @@
 import numpy as np
 import constants
-from gates import cliffords, TGate
+import gates
 import random
 import measurement
+import itertools
 
 def a2str(a):
     """
@@ -47,10 +48,10 @@ def desuperpositionise(t, u, d, v):
 
     if len(v0) > 0:
         q = v0[0]
-        VCList = [cliffords.CXGate(control=q, target=i) for i in v0   if i != q]  + [cliffords.CZGate(control=q,target=i) for i in v1] 
+        VCList = [gates.cliffords.CXGate(control=q, target=i) for i in v0   if i != q]  + [gates.cliffords.CZGate(control=q,target=i) for i in v1] 
     else:
         q = v1[0]
-        VCList = [cliffords.CXGate(control=i, target=q) for i in v1 if i != q]
+        VCList = [gates.cliffords.CXGate(control=i, target=q) for i in v1 if i != q]
 
     y, z = None, None
     if t[q] == 1:
@@ -122,7 +123,7 @@ def desuperpositionise(t, u, d, v):
     v[q] =  b % 2 
     
     if a == 1:
-        g = cliffords.SGate(q)
+        g = gates.cliffords.SGate(q)
         VCList.append(g)
 
     return phase, VCList, v, s
@@ -130,10 +131,10 @@ def desuperpositionise(t, u, d, v):
 
 def random_clifford_circuits(qubits, depth, N):
     #some Clifford gate constructors take two params and some take 1
-    params_dict = {cliffords.SGate: 1, cliffords.CZGate: 2,cliffords.CXGate: 2,cliffords.HGate:1} 
+    params_dict = {gates.cliffords.SGate: 1, gates.cliffords.CZGate: 2,gates.cliffords.CXGate: 2,gates.cliffords.HGate:1} 
     for _ in range(N):
-        gates = random.choices(list(params_dict.keys()), k=depth)
-        yield cliffords.CompositeCliffordGate([gate(*random.sample(range(qubits), k=params_dict[gate])) for gate in gates])
+        gs = random.choices(list(params_dict.keys()), k=depth)
+        yield gates.cliffords.CompositeCliffordGate([g(*random.sample(range(qubits), k=params_dict[g])) for g in gs])
     
 def random_clifford_circuits_with_z_projectors(qubits, depth, N):
     for target, a, circuit in zip(random.choices(range(qubits), k=N), random.choices(range(1), k=N), random_clifford_circuits(qubits, depth, N)):
@@ -141,14 +142,14 @@ def random_clifford_circuits_with_z_projectors(qubits, depth, N):
 
 def random_clifford_circuits_with_T(qubits, depth, N):
     #some Clifford gate constructors take two params and some take 1
-    params_dict = {cliffords.SGate: 1, cliffords.CZGate: 2,cliffords.CXGate: 2,cliffords.HGate:1, TGate:1} 
+    params_dict = {gates.cliffords.SGate: 1, gates.cliffords.CZGate: 2,gates.cliffords.CXGate: 2,gates.cliffords.HGate:1, gates.TGate:1} 
     count = 0
     while count < N:
-        gates = random.choices(list(params_dict.keys()), k=depth)
-        t = len([g for g in gates if g == TGate])
+        gs = random.choices(list(params_dict.keys()), k=depth)
+        t = len([g for g in gs if g == gates.TGate])
         if t > 0:
             count += 1
-            yield t, cliffords.CompositeCliffordGate([gate(*random.sample(range(qubits), k=params_dict[gate])) for gate in gates])
+            yield t, gates.cliffords.CompositeCliffordGate([g(*random.sample(range(qubits), k=params_dict[g])) for g in gs])
 
         
 def rref(mat):
@@ -206,3 +207,70 @@ def sort_pauli_string(x,z):
         sign =  (sign + (t @ x[j])) % np.uint8(2)
 
     return sign
+
+def find_asymetric_coords(M):
+    """
+    Given a square numpy array M return i,j such that M[i,j] != M[j,i]
+    """
+    for i in range(M.shape[0]):
+        for j in range(i):
+            if M[i,j] != M[j,i]:
+                return i,j
+    return None
+
+
+def slowZ2ExponentialSum(M, L):
+    """
+    For testing purposes only
+    This is exponentially slow
+    """
+    total = 0
+    for tuple in itertools.product([0,1], repeat=len(L)):
+        x = np.array(tuple)
+        total += (-1)**( x @ (M @ x) + L@x)
+    return total
+        
+def z2ExponentialSum(M, L):
+    """
+    Given a Z2 valued quadratic form
+    q(x) = x. Mx + L.x mod 2
+    compute sum_x (-1)^q(x) over all bitstrings x
+    in cubic time
+    """
+
+    exponent_of_2 = 0
+    exponent_of_minus_1 = 0
+    while True:
+        #we first seek indices i,j such that M_ij != M_ji
+        coords = find_asymetric_coords(M)
+        
+        if coords == None:
+            #M is symmetric
+            #at this point the computation is trivial
+            if (np.diag(M) == L).all():
+                return ((-1)**exponent_of_minus_1) * (2**(exponent_of_2+len(L)))
+            else:
+                return 0
+        else:
+            i,j=coords
+            mask = np.ones(len(L), dtype=bool)
+            mask[[i,j]] = False
+            
+            m1 = (M[i] + M[:,i])[mask]
+            m2 = (M[j] + M[:,j])[mask]
+
+            mu1_consts = L[i] + M[i,i] % np.uint8(2)
+            mu2_consts = L[j] + M[j,j] % np.uint8(2)
+
+            M_else = M[mask][:,mask]
+            L_else = L[mask]
+
+            exponent_of_2 += 1
+            exponent_of_minus_1 = (exponent_of_minus_1+mu1_consts*mu2_consts) % np.uint8(2)
+
+            M = (M_else + np.outer(m1, m2)) % np.uint8(2)
+            L = (L_else + mu1_consts*m2 + mu2_consts*m1) % np.uint8(2)
+            
+
+        
+            
