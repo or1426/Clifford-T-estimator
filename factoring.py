@@ -1,4 +1,4 @@
-import cliffords
+from gates import cliffords
 import numpy as np
 
 def rcef_state(state):
@@ -76,9 +76,10 @@ def fix(state, target):
             cnot = cliffords.CXGate(control = s1Qubits[0], target = q)
             cnot.rightMultiplyC(state)
             state.s[q] = 0
-            
+
     #at this point add a pair of swaps so the target qubit has s = v = 0
     q = np.flatnonzero((state.v == 0) & (state.s == 0))[0]
+    
     if q != target:
         #left hand swap gets multiplied on to UC
         cliffords.CXGate(target, q).rightMultiplyC(state)
@@ -88,6 +89,7 @@ def fix(state, target):
         state.v[[q,target]] = state.v[[target,q]]
         state.s[[q,target]] = state.s[[target,q]]
     return state
+
 
 
 def gaussian_eliminate(state,q=0):
@@ -115,13 +117,13 @@ def reduce_column(state,q):
     only using allowed operations
     """
 
-    if (state.G[q] * state.v != 0).any():
-        return False
+    #if (state.G[q] * state.v != 0).any():
+    #    return False
     
     fix(state,q)
 
-    if (state.G[q]*state.s != 0).any():
-        return False
+    #if (state.G[q]*state.s != 0).any():
+    #    return False
 
     fnz = np.flatnonzero(state.G[q])
     if state.G[q][q] != 1:

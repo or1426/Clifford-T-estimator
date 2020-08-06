@@ -21,7 +21,7 @@ class QiskitSimulator(object):
         for i, b in enumerate(state):
             if b:
                 circuit.x(i)
-        projector = None
+        projectors = []
         for gate in composite.gates:
             d = gate.data()
             if d[0] == "H":
@@ -32,14 +32,15 @@ class QiskitSimulator(object):
                 circuit.cz(target_qubit=d[1], control_qubit=d[2])
             elif d[0] == "CX":
                 circuit.cx(target_qubit=d[1], control_qubit=d[2])
+            elif d[0] == "T":
+                circuit.t(qubit=d[1])
             elif d[0] == "PZ":                
-                projector = d
-                break # once we hit a projector the circuit is done                
+                projectors.append(d)
             else:
                 raise TypeError("Only unitary Clifford gates and Z projectors supported! Recieved: {}".format(gate))
         job = qiskit.execute(circuit, backend=self.backend,backend_options={"method": "statevector"})
         statevector = _rearange_state_vector(num_qubits, job.result().get_statevector(circuit))
-        if projector:
+        for projector in projectors:
             #we need to zero everything that we aren't projecting onto
             #this will be half of the entries of the state-vector
             target_qubit = projector[1]

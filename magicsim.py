@@ -24,8 +24,6 @@ class TrivialSimulator(object):
         self.circ = CompositeCliffordGate(self.circ)
 
 
-        
-
     def magic_sample(self, ys):
         circ = deepcopy(self.circ)
         circ = CompositeCliffordGate([HGate(self.n+i) for i in range(self.t)]) | CompositeCliffordGate([SGate(self.n+i) for i in range(self.t) if ys[i] == 1]) | circ

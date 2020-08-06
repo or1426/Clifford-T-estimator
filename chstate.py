@@ -2,7 +2,8 @@ from __future__ import annotations
 import numpy as np
 from dataclasses import dataclass
 import util
-
+import time
+import myModule
 @dataclass
 class CHState:
     N : int # number of qubits
@@ -181,45 +182,87 @@ class CHState:
         compute
         <|phi_A | self >
         """
-
-        print("A = ", A)
         J = np.int64((self.M @ self.F.T) % np.uint8(2))
         J[np.diag_indices_from(J)] = self.g
-
-        print("J = ", J)
-        
-        K = (self.G.T @ (A + J) @ self.G) 
-        print("K = ", K)
+        K = (self.G.T @ (A + J) @ self.G)
         prefactor = (2**(-(self.N + self.v.sum())/2)) * ((1j)**(self.s @ K @ self.s)) * ((-1)**(self.s @ self.v))
-        print("pf = ", prefactor)
         B = (K + 2*np.diag(self.s + self.s @ K))[self.v == 1][:,self.v == 1] % np.uint8(4)
-        print("B = ", B)
+
         #M = np.triu(B) % np.uint8(2) #upper triangular part including diagonal
         #M[np.diag_indices_from(M)] = np.uint8(0)
         #print("M = ", M)
         K = B[np.diag_indices_from(B)] % np.uint8(2)
-        print("K = ", K)
+
         L = ((B[np.diag_indices_from(B)] - K) // np.uint8(2))  # the // forces integer division and makes sure the dtype remains uint8
-        print("L = ", L)
 
         newL = np.append(L,0)
 
-        newM = np.triu((B +  np.outer(K,K)) %np.uint8(2))
+        newM = np.triu(B +np.outer(K,K)) %np.uint8(2)
         newM[np.diag_indices_from(newM)] = np.uint8(0)
         
         newM = np.concatenate((newM, np.array([K],dtype=np.uint8)), axis=0)
         newM = np.concatenate((newM, np.array([[0]*newM.shape[0]],dtype=np.uint8).T) ,  axis=1)
+        newM = np.uint8(newM)
         
-        re = util.z2ExponentialSum(newM, newL) / 2
-        newL[-1] = 1
+        newL = np.uint8(newL)
 
-        print("newM = ", newM)
-        print("newL = ", newL)
+        # m2 = np.copy(newM)
+        # l2 = np.copy(newL)
+        # m3 = np.copy(newM)
+        # l3 = np.copy(newL)
         
-        im = util.z2ExponentialSum(newM, newL) / 2
-        print("re = ", re, "im = ", im)
-        print(self.w.conjugate()*prefactor)
-        return self.w.conjugate()*prefactor*(re + 1.j *im)
+        #re = util.slowZ2ExponentialSum(newM, newL) / 2
+        #newL[-1] = 1
+        #im = util.slowZ2ExponentialSum(newM, newL) / 2
+        
+        #re  = util.z2ExponentialSum(m2, l2)
+        #l2[-1] = 1
+        #im  = util.z2ExponentialSum(m2, l2)   
+        #re /= 2
+        #im /= 2
+
+        #delta = time.monotonic()
+        #re, im = util.z2DoubleExponentialSum2(newM,newL)
+        
+        
+        re, im = myModule.exponential_sum(newM,newL)
+        re /= 2
+        im /= 2
+
+        #delta = time.monotonic() - delta
+        # re2, im2 = util.z2DoubleExponentialSum2(m2,l2)
+        # re2 /=2
+        # im2 /=2
+
+        # re3  = util.z2ExponentialSum(m3, l3)
+        # l3[-1] = 1
+        # im3  = util.z2ExponentialSum(m3, l3)
+        
+        # re3 /= 2
+        # im3 /= 2
+
+        # good = abs(re-re2) + abs(im-im2) < 1e-6
+        # if not good:
+        #     print(re, im)
+        #     print(re2, im2)
+        #     print(re3, im3)
+        #     print()
+
+        
+        return self.phase.conjugate()*prefactor*complex(re, im )
 
         
         
+    def __eq__(self, other):
+        if not isinstance(other, CHState):
+            return False
+
+        if (self.F == other.F).all() and \
+           (self.G == other.G).all() and \
+           (self.M == other.M).all() and \
+           (self.g == other.g).all() and \
+           (self.v == other.v).all() and \
+           (self.s == other.s).all() and abs(self.phase - other.phase) < 1e-10:
+            return True
+           
+            

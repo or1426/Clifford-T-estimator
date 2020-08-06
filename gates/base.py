@@ -38,4 +38,5 @@ class TGate(ComposableGate):
         self.target = target
     def __str__(self):
         return "T({})".format(self.target)
-
+    def data(self):
+        return "T", self.target

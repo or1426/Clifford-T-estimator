@@ -4,6 +4,7 @@ import gates
 import random
 import measurement
 import itertools
+import myModule
 
 def a2str(a):
     """
@@ -42,7 +43,6 @@ def desuperpositionise(t, u, d, v):
         raise ValueError("t and u should differ: {}, {}".format(t,u))
     v0 = np.flatnonzero((v == 0) & tNeqUArray)
     v1 = np.flatnonzero((v == 1) & tNeqUArray)
-
     q = None
     VCList = []
 
@@ -56,14 +56,13 @@ def desuperpositionise(t, u, d, v):
     y, z = None, None
     if t[q] == 1:
         y = np.copy(u)
-        y[q] = np.uint((y[q] + 1) %2)
+        y[q] = np.uint8((y[q] + 1) %2)
         z = np.copy(u)
     else: # t[q] == 0
         y = np.copy(t)
         z = np.copy(t)
         z[q] = np.uint8((1+z[q]) %2)
-
-    #now we care about the state H_q^{v_q}  (|y_q> + i^delta |z_q>)
+    #now we care about the state H_q^{v_q}  (|y_q> + i^delta |z_q>)    
     #where y_q != z_q
     #lets put this in a standard form
     # i^w (|0> + i^(k) |1>)
@@ -117,21 +116,20 @@ def desuperpositionise(t, u, d, v):
         print(k)
         print(k.dtype)
         print(d)
-        
+
     s = y
     s[q] = c
-    v[q] =  b % 2 
+    v[q] =  b % 2
     
     if a == 1:
         g = gates.cliffords.SGate(q)
         VCList.append(g)
-
     return phase, VCList, v, s
 
 
 def random_clifford_circuits(qubits, depth, N):
     #some Clifford gate constructors take two params and some take 1
-    params_dict = {gates.cliffords.SGate: 1, gates.cliffords.CZGate: 2,gates.cliffords.CXGate: 2,gates.cliffords.HGate:1} 
+    params_dict = {gates.cliffords.CXGate: 2,gates.cliffords.SGate: 1, gates.cliffords.CZGate: 2,gates.cliffords.HGate:1} #
     for _ in range(N):
         gs = random.choices(list(params_dict.keys()), k=depth)
         yield gates.cliffords.CompositeCliffordGate([g(*random.sample(range(qubits), k=params_dict[g])) for g in gs])
@@ -139,6 +137,19 @@ def random_clifford_circuits(qubits, depth, N):
 def random_clifford_circuits_with_z_projectors(qubits, depth, N):
     for target, a, circuit in zip(random.choices(range(qubits), k=N), random.choices(range(1), k=N), random_clifford_circuits(qubits, depth, N)):
         yield circuit | measurement.PauliZProjector(target,a)
+
+def random_clifford_circuits_with_bounded_T(qubits, depth, N, T):
+    #some Clifford gate constructors take two params and some take 1
+    cliffords = [gates.cliffords.SGate, gates.cliffords.CZGate, gates.cliffords.CXGate, gates.cliffords.HGate]
+    params_dict = {gates.cliffords.SGate: 1, gates.cliffords.CZGate: 2,gates.cliffords.CXGate: 2,gates.cliffords.HGate:1, gates.TGate:1} 
+    count = 0
+    for _ in range(N):
+        gs = random.choices(cliffords, k=depth)
+        positions = random.sample(range(len(gs)), T)
+        for pos in positions:
+            gs[pos] = gates.TGate
+
+        yield gates.cliffords.CompositeCliffordGate([g(*random.sample(range(qubits), k=params_dict[g])) for g in gs])
 
 def random_clifford_circuits_with_T(qubits, depth, N):
     #some Clifford gate constructors take two params and some take 1
@@ -271,6 +282,199 @@ def z2ExponentialSum(M, L):
             M = (M_else + np.outer(m1, m2)) % np.uint8(2)
             L = (L_else + mu1_consts*m2 + mu2_consts*m1) % np.uint8(2)
             
+#@profile
+def z2DoubleExponentialSum(M, L):
+    """
+    Given a Z2 valued quadratic form 
+    q(x) = x. Mx + L.x mod 2
+    where where L[-1] == 0
+    compute sum_x (-1)^q(x) over all bitstrings x
+    with both  L[-1] == 0 and L[-1] == 1
+    in cubic time
+    """
+    exponent_of_2 = 0
+    exponent_of_minus_1 = 0
+    last_element_asymetric = False #if we hit an asymetric component of the matrix with i = len(L) - 1 we make this true
+    mu1_consts = None
+    mu2_consts = None
+    mask = np.ones(len(L), dtype=bool)
+    u2 = np.uint8(2)
+    while True:
+        #we first seek indices i,j such that M_ij != M_ji
+        #coords = find_asymetric_coords(M)
+        coords = find_asymetric_coords(M)
+        
+        #print(coords)
+        if coords == None:
+            #M is symmetric
+            #at this point the computation is trivial
+            if last_element_asymetric:
+                if (np.diag(M) == L).all():
+                    new_exponent_of_minus_1 = (exponent_of_minus_1 + mu1_consts*mu2_consts + (mu1_consts+1)*mu2_consts) %np.uint8(2)
+                    return ((-1)**exponent_of_minus_1) * (2**(exponent_of_2+len(L))), ((-1)**new_exponent_of_minus_1) * (2**(exponent_of_2+len(L)))
+                else:
+                    return 0, 0
+                
+            else:
+                if (np.diag(M)[:-1] == L[:-1]).all():
+                    if (np.diag(M) == L).all():
+                        #print(np.diag(M))
+                        return ((-1)**exponent_of_minus_1) * (2**(exponent_of_2+len(L))), 0
+                    else:
+                        #print(np.diag(M))
+                        return 0, ((-1)**exponent_of_minus_1) * (2**(exponent_of_2+len(L)))
+                        
+                else:
+                    return 0, 0
+        else:
+            i,j=coords
+            if i == len(L) -1: # note that j < i so only i can be the last index
+                #we're about to delete the last remaining row and column in M
+                #since the coordinates returned by find_asymetric_coords are ordered
+                last_element_asymetric = True
+
+            mask[i] = False
+            mask[j] = False
+            
+            m1 = (M[i] + M[:,i])[mask] % np.uint8(2)
+            m2 = (M[j] + M[:,j])[mask] % np.uint8(2)
+
+            mu1_consts = L[i] + M[i,i] % np.uint8(2)
+            mu2_consts = L[j] + M[j,j] % np.uint8(2)
+
+            M = M[mask][:,mask]
+            L = L[mask]
+
+            exponent_of_2 += 1
+            exponent_of_minus_1 = (exponent_of_minus_1+mu1_consts*mu2_consts) % np.uint8(2)
+
+                         
+            #M[np.bool_(m1)] += m2
+            #print(m1)
+            #print(m2)
+            #M = (M + np.outer(m1, m2)) % np.uint8(2)
+            myModule.add_outer_product(M, m1, m2);
+            #M %= 2
+            
+            #L = (L  + mu1_consts*m2 + mu2_consts*m1) % 2
+            if mu1_consts == 1:
+                L += m2
+            if mu2_consts == 1:
+                L += m1
+            L %= 2
+            
+            mask[i] = True
+            mask[j] = True
+            mask = mask[:-2]
+        
+#@profile            
+def z2DoubleExponentialSum2(M, L):
+    """
+    Given a Z2 valued quadratic form 
+    q(x) = x. Mx + L.x mod 2
+    where where L[-1] == 0
+    compute sum_x (-1)^q(x) over all bitstrings x
+    with both  L[-1] == 0 and L[-1] == 1
+    in cubic time
+    """
+    exponent_of_2 = 0
+    exponent_of_minus_1 = 0
+    last_element_asymetric = False #if we hit an asymetric component of the matrix with i = len(L) - 1 we make this true
+    mu1_consts = None
+    mu2_consts = None
+    mask = np.zeros(len(L), dtype=bool)
+    u2 = np.uint8(2)
+    killed = 0
+    while True:
+        #we first seek indices i,j such that M_ij != M_ji
+        #coords = find_asymetric_coords(M)
+        coords = find_asymetric_coords(M)
+        
+        ##print(coords)
+        if coords == None:
+            #M is symmetric
+            #at this point the computation is trivial
+            #print("py last_element_asymetric", last_element_asymetric)
+            #print("py", exponent_of_minus_1, exponent_of_2, killed, mu2_consts, last_element_asymetric)
+            #print(M)
+            #print(L)
+            
+            if last_element_asymetric:
+                if (np.diag(M) == L).all():
+                    #print("p1")
+                    new_exponent_of_minus_1 = (exponent_of_minus_1 + mu1_consts*mu2_consts + (mu1_consts+1)*mu2_consts) %np.uint8(2)
+                    return ((-1)**exponent_of_minus_1) * (2**(exponent_of_2+len(L)-killed)), ((-1)**new_exponent_of_minus_1) * (2**(exponent_of_2+len(L)-killed))
+                else:
+                    #print("p2")
+                    return 0, 0
+                
+            else:
+                if (np.diag(M)[:-1] == L[:-1]).all():
+                    if (np.diag(M) == L).all():
+                        ##print(np.diag(M))
+                        #print("p3")
+                        return ((-1)**exponent_of_minus_1) * (2**(exponent_of_2+len(L)-killed)), 0
+                    else:
+                        ##print(np.diag(M))
+                        #print("p4")
+                        return 0, ((-1)**exponent_of_minus_1) * (2**(exponent_of_2+len(L)-killed))
+                        
+                else:
+                    #print("p5")
+                    return 0, 0
+        else:
+            i,j=coords
+            ##print("[{},{}]".format(i,j))
+            ##print(M)
+            if i == len(L) - 1: # note that j < i so only i can be the last index
+                #we're about to delete the last remaining row and column in M
+                #since the coordinates returned by find_asymetric_coords are ordered
+                last_element_asymetric = True
+
+            killed += 2
+            ##print(M)
+            m1 = (M[i] + M[:,i]) % np.uint8(2)
+            m1[i] = 0
+            m1[j] = 0
+            m2 = (M[j] + M[:,j]) % np.uint8(2)
+            m2[i] = 0
+            m2[j] = 0
+            #print("py m1", m1)
+            #print("py m2", m2)
+            mu1_consts = (L[i] + M[i,i]) % np.uint8(2)
+            mu2_consts = (L[j] + M[j,j]) % np.uint8(2)
+            
+            #print("pyconsts:", mu1_consts, mu2_consts)
+            #print(M)
+            #print("pyL", L)
+            M[i] = 0
+            M[j] = 0
+            M[:,i] = 0
+            M[:,j] = 0
+
+            L[i] = 0
+            L[j] = 0
+
+            exponent_of_2 += 1
+            exponent_of_minus_1 = (exponent_of_minus_1+ mu1_consts*mu2_consts) % np.uint8(2)
+
+                         
+            #M[np.bool_(m1)] += m2
+            ##print(m1)
+            ##print(m2)
+            #M = (M + np.outer(m1, m2)) % np.uint8(2)
+            myModule.add_outer_product(M, m1, m2);
+            #M %= 2
+            
+            #L = (L  + mu1_consts*m2 + mu2_consts*m1) % 2
+            if mu1_consts == 1:
+                L += m2
+            if mu2_consts == 1:
+                L += m1
+            L %= 2
+            
+            #mask[i] = False
+            #mask[j] = False
 
         
             

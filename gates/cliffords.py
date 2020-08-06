@@ -106,7 +106,7 @@ class XGate(CliffordGate):
 
     def applyCH(self, state : chstate.CHState) -> chstate.CHState:
         alpha = np.uint8((state.G[self.target]*(1-state.v)*state.s).sum() % np.uint8(2))
-        state.s = np.uint8(state.s + state.G[self.target]*state.v % np.uint8(2))
+        state.s = np.uint8((state.s + state.G[self.target]*state.v) % np.uint8(2))
         state.phase *= (-1)**alpha
         
         return state
@@ -191,21 +191,20 @@ class HGate(CliffordGate):
 
     def applyCH(self, state: chstate.CHState) -> chstate.CHState:
         t = state.s ^ (state.G[self.target]* state.v) 
-        u = (state.s ^ (state.F[self.target]*np.uint8(1-state.v)) ^ (state.M[self.target]*state.v)) 
+        u = (state.s ^ (state.F[self.target]*np.uint8(1-state.v)) ^ (state.M[self.target]*state.v))
         alpha = (state.B[self.target]*np.uint8(1-state.v)*state.s).sum()
         beta = (state.C[self.target]*np.uint8(1-state.v)*state.s + state.A[self.target]*state.v*(state.C[self.target] + state.s)).sum()
-        
         if all(t == u):
             state.s = t
             state.phase = state.phase * ((-1)**alpha + (complex(0,1)**state.g[self.target])*(-1)**beta)/np.sqrt(2)
             return state
         else:
-            phase, VCList, v, s = util.desuperpositionise(t, u, (state.g[self.target] + 2 * (alpha+beta)) % constants.UNSIGNED_4 , state.v)
+            phase, VCList, v, s = util.desuperpositionise(t, u, np.uint8((state.g[self.target] + 2 * (alpha+beta))) % constants.UNSIGNED_4 , state.v)
             state.phase *= phase
             state.phase *= (-1)**alpha / np.sqrt(2) # sqrt(2) since H = (X + Z)/sqrt(2)
             state.v = v
             state.s = s
-
+            
             for gate in VCList:
                 gate.rightMultiplyC(state)
             
@@ -302,7 +301,6 @@ class PauliZProjector(CliffordGate):
         # UC UH (|s> + (-1)^(k+a) |t>)
         k = self.a + (state.B[self.target] * np.uint8(1 + state.v) * state.s).sum(dtype=np.uint8) % np.uint8(2)
         t = np.uint8((state.B[self.target] * state.v) ^ state.s)
-
         if all(t == state.s):
             state.phase *= (1 + (-1)**k)/2
         else:
