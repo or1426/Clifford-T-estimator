@@ -8,8 +8,31 @@
 #include <stdbool.h>
 #include <tgmath.h>
 
+#include <time.h>
+
+double bravyi1 = 0;
+double bravyi2 = 0;
+double bravyi3 = 0;
+double bravyi4 = 0;
+double bravyi5 = 0;
+double bravyi6 = 0;
+double bravyi7 = 0;
+double bravyi8 = 0;
+
+
+double me1 = 0;
+double me2 = 0;
+double me3 = 0;
+clock_t start;
+clock_t end;
+
+
 //typedef unsigned __int128 uint_bitarray_t;
+//#define popcount(x) popcount_unsigned__int128(x)
 typedef uint_fast64_t uint_bitarray_t;
+#define popcount(x) popcount_uint_fast64_t(x)
+
+//#define popcount(x) popcount_generic(x)
 
 const uint_bitarray_t ONE = 1;
 
@@ -36,12 +59,20 @@ static unsigned int popcount_mod_2(uint_bitarray_t x){
     return acc & ONE;
 }
 
-static unsigned int popcount(uint_bitarray_t x){
+static unsigned int popcount_generic(uint_bitarray_t x){
     unsigned int acc = 0;
     for(int i = 0; i < sizeof(x)*8; i++){
         acc += ((unsigned int)(x>>i) & ONE);
     }
     return acc;
+}
+static unsigned int popcount_uint_fast64_t(uint_fast64_t x){
+    return __builtin_popcountll(x);
+}
+
+static unsigned int popcount_unsigned__int128(unsigned __int128 x){
+    unsigned __int128 mask = ((unsigned __int128)0xFFFFFFFFu);
+    return __builtin_popcountll((unsigned long long)(x & (mask<<64))) + __builtin_popcountll((unsigned long long)( (x&mask)  >>64));
 }
 
 
@@ -890,38 +921,85 @@ void dealocate_equatorial_matrix(equatorial_matrix_t * matrix){
 double complex equatorial_inner_product(CHForm* state, equatorial_matrix_t equatorial_state){
     //printf("e1\n");
     //we store A+J in AJ
-    unsigned char * AJ = calloc(state->n*state->n, sizeof(unsigned char));
+    start = clock(); //timing
+    unsigned char * AJ = calloc(state->n, sizeof(uint_bitarray_t));
 
-    for(int i = 0; i < state->n; i++){
-        for(int j = 0; j < i; j++){
-            AJ[i + state->n*j] = ((popcount_mod_2(state->M[i] & state->F[j])) + ((equatorial_state.mat[i] >>j) & ONE)) ;
-            AJ[j + state->n*i] = AJ[i + state->n*j];
-        }
-        AJ[i+state->n*i] = (((state->g1>>i)&ONE) +
-                            ((equatorial_state.d1>>i)&ONE)
-                            + 2*(((state->g2>>i)&ONE) + ((equatorial_state.d2>>i)&ONE)));
+    for(size_t i = 0; i < state->n; i++){
+	for(size_t j = 0; j < i; j++){
+	    uint_bitarray_t bit = popcount_mod_2(state->M[i] & state->F[j]) & ONE;
+	    AJ[i] |= (bit << j);
+	    AJ[j] |= (bit << i);
+	}
     }
 
+    //add A to J
+    for(size_t i = 0; i < state->n; i++){
+	AJ[i] ^= equatorial_state.mat[i];
+    }
+    //now we need to sort out the diagonal
+    uint_bitarray_t AJd1 = equatorial_state.d1;
+    uint_bitarray_t AJd2 = equatorial_state.d2;
+
+    AJd2 ^= (AJd1 & state->g1);
+    AJd1 ^= state->g1;
+    AJd2 ^= state->g2;
+        
+    /* for(int j = 0; j < i; j++){ */
+	    
+    /*         AJ[i + state->n*j] = ((popcount_mod_2(state->M[i] & state->F[j])) + ((equatorial_state.mat[i] >>j) & ONE)) ; */
+    /*         AJ[j + state->n*i] = AJ[i + state->n*j]; */
+    /*     } */
+    /*     AJ[i+state->n*i] = (((state->g1>>i)&ONE) + */
+    /*                         ((equatorial_state.d1>>i)&ONE) */
+    /*                         + 2*(((state->g2>>i)&ONE) + ((equatorial_state.d2>>i)&ONE))); */
+
+
+    end = clock(); //timing
+    bravyi1 += ((double)(end - start)) / (double)CLOCKS_PER_SEC;
+    start = clock(); //timing
+
+    uint_bitarray_t * GT = calloc(state->n, sizeof(uint_bitarray_t)); // store transpose of G
+    for(size_t i = 0; i < state->n; i++){
+	for(size_t j = 0; j < state->n; j++){
+	    GT[j] |= ((state->G[i] >> j) & ONE) << i;
+	}
+    }
+    
+    
     //printf("e2\n");
     unsigned char * K = calloc(state->n*state->n, sizeof(unsigned char));
-
     //now we want to compute K = G^T AJ G
     for(int i = 0; i < state->n; i++){
         for(int j = 0; j < state->n; j++){
-            for(int a = 0; a < state->n; a++){
-                K[i+j*state->n] += AJ[i+a*state->n] * ((state->G[a]>>j)&ONE);
-            }
-        }
+	    K[i+j*state->n] = popcount(AJ[i] & GT[j]) + (((AJd1 >> i) & ONE) + 2*((AJd2 >> i) & ONE))*((state->G[i]>>j)&ONE);
+	}
     }
+    
+    /* for(int i = 0; i < state->n; i++){ */
+    /*     for(int j = 0; j < state->n; j++){ */
+    /*         for(int a = 0; a < state->n; a++){ */
+    /*             K[i+j*state->n] += AJ[i+a*state->n] * ((state->G[a]>>j)&ONE); */
+    /*         } */
+    /*     } */
+    /* } */
+    end = clock(); //timing
+    bravyi2 += ((double)(end - start)) / (double)CLOCKS_PER_SEC;
+    start = clock(); //timing
     //printf("e3\n");
-    for(int i = 0; i < state->n; i++){
-        for(int j = 0; j < state->n; j++){
-            AJ[i+j*state->n] = 0; //we don't need A+J anymore so just use it as tempory "scratch space"
-            for(int a = 0; a < state->n; a++){
-                AJ[i+j*state->n] += ((state->G[a]>>i)&ONE) * K[a+j*state->n];
-            }
-        }
-    }
+    
+    /* for(int i = 0; i < state->n; i++){ */
+    /*     for(int j = 0; j < state->n; j++){ */
+    /*         AJ[i+j*state->n] = 0; //we don't need A+J anymore so just use it as tempory "scratch space" */
+    /*         for(int a = 0; a < state->n; a++){ */
+    /*             AJ[i+j*state->n] += ((state->G[a]>>i)&ONE) * K[a+j*state->n]; */
+    /*         } */
+    /*     } */
+    /* } */
+
+    end = clock(); //timing
+    bravyi3 += ((double)(end - start)) / (double)CLOCKS_PER_SEC;
+    start = clock(); //timing
+    
     //printf("e4\n");
     free(K);
     K = AJ;
@@ -940,6 +1018,9 @@ double complex equatorial_inner_product(CHForm* state, equatorial_matrix_t equat
             sKs += (state->s>>a)*(state->s>>p)*K[a+p*state->n];
         }
     }
+    end = clock(); //timing
+    bravyi4 += ((double)(end - start)) / (double)CLOCKS_PER_SEC;
+    start = clock(); //timing
     //printf("e6\n");
     diag ^= sK;
 
@@ -953,6 +1034,9 @@ double complex equatorial_inner_product(CHForm* state, equatorial_matrix_t equat
     }else if(d == 3){
         prefactor *= -1.*I;
     }
+    end = clock(); //timing
+    bravyi5 += ((double)(end - start)) / (double)CLOCKS_PER_SEC;
+    start = clock(); //timing
     unsigned char * B = calloc(n*n, sizeof(unsigned char));
     int fill_count_a = 0;
     int fill_count_b = 0;
@@ -971,6 +1055,9 @@ double complex equatorial_inner_product(CHForm* state, equatorial_matrix_t equat
             fill_count_a += 1;
         }
     }
+    end = clock(); //timing
+    bravyi6 += ((double)(end - start)) / (double)CLOCKS_PER_SEC;
+    start = clock(); //timing
 
     //printf("e7\n");
     //k + 2l = diag(B)
@@ -990,12 +1077,16 @@ double complex equatorial_inner_product(CHForm* state, equatorial_matrix_t equat
     //printf("e9\n");
     M[n] = k;
     n +=1;
+    end = clock(); //timing
+    bravyi7 += ((double)(end - start)) / (double)CLOCKS_PER_SEC;
+    start = clock(); //timing
     //printf("e10\n");
 
     //at this point we only need M and l
     //so free everything else
     free(B);
     free(K);
+    
     double re=0, im=0;
     int killed = 0;
     int exponent_of_2 = 0;
@@ -1107,6 +1198,10 @@ double complex equatorial_inner_product(CHForm* state, equatorial_matrix_t equat
             }
         }
     }
+    
+    
+    end = clock(); //timing
+    bravyi8 += ((double)(end-start))/ (double)CLOCKS_PER_SEC;
 
     free(M);
     //printf("en\n");
@@ -1117,6 +1212,7 @@ double complex equatorial_inner_product(CHForm* state, equatorial_matrix_t equat
 static void partial_equatorial_inner_product(CHForm* state, equatorial_matrix_t equatorial_state, uint_bitarray_t mask){
     int stateI = 0;
     int stateJ = 0;
+    start = clock(); //timing
     for(int i = 0; i < equatorial_state.n; i++){
         while((((mask >> stateI) & ONE) == 0) && (stateI < state->n)){
             stateI += 1;
@@ -1143,7 +1239,9 @@ static void partial_equatorial_inner_product(CHForm* state, equatorial_matrix_t 
         }
         stateJ = 0;
     }
-
+    end = clock(); //timing
+    me1 += ((double)(end-start))/(double)CLOCKS_PER_SEC;
+    start = clock();//timing
     stateI = 0;
 
     for(int i = 0; i < equatorial_state.n; i++){
@@ -1156,7 +1254,12 @@ static void partial_equatorial_inner_product(CHForm* state, equatorial_matrix_t 
         }
 
     }
+    end = clock();//timing
+    me2 += ((double)(end-start))/(double)CLOCKS_PER_SEC;
+    start = clock();
     postselect_and_reduce(state, 0u, mask);
+    end = clock();
+    me3 += ((double)(end-start))/(double)CLOCKS_PER_SEC;
 }
 
 static PyObject * equatorial_inner_product_wrapper(PyObject* self, PyObject* args){
@@ -1643,6 +1746,80 @@ static PyObject * magic_sample_2(PyObject* self, PyObject* args){
     return PyComplex_FromDoubles(creal(acc), cimag(acc));
 }
 
+static PyObject * time_equatorial_prods(PyObject* self, PyObject* args){
+    me1 = 0;
+    me2 = 0;
+    me3 = 0;
+    bravyi1 = 0;
+    bravyi2 = 0;
+    bravyi3 = 0;
+    bravyi4 = 0;
+    bravyi5 = 0;
+    bravyi6 = 0;
+    bravyi7 = 0;
+    bravyi8 = 0;
+    
+    PyArrayObject * gates;
+    PyArrayObject * controls;
+    PyArrayObject * targets;
+
+    int n;
+    int repeats;
+    unsigned int seed;
+
+    if (!PyArg_ParseTuple(args, "iiiO!O!O!", &n, &seed, &repeats,
+                          &PyArray_Type, &gates,
+                          &PyArray_Type, &controls,
+                          &PyArray_Type, &targets)){
+        return NULL;
+    }
+
+    srand(seed);
+
+    CHForm * evolved_state = c_apply_gates_to_basis_state(n, gates, controls, targets);
+
+    uint_bitarray_t mask = 0u;
+    for(int i =0; i < n; i++){
+	mask |= (ONE << i);
+    }
+    
+
+    double cpu_time_used_1 = 0.;
+    double cpu_time_used_2 = 0.;
+    double start1 = 0;
+    double end1 = 0;
+	
+
+    for(int counter = 0; counter < repeats; counter++){
+	CHForm copy1 = copy_CHForm(evolved_state);
+	CHForm copy2 = copy_CHForm(evolved_state);
+	
+	equatorial_matrix_t equatorial_state;
+	init_random_equatorial_matrix(&equatorial_state, n);
+
+	start1 = clock();
+	equatorial_inner_product(&copy1, equatorial_state);
+	end1 = clock();
+
+	cpu_time_used_1 += ((double) (end1 - start1)) / (double)CLOCKS_PER_SEC;
+
+	start1 = clock();
+	partial_equatorial_inner_product(&copy2, equatorial_state, mask);
+	end1 = clock();
+
+	cpu_time_used_2 += ((double) (end1 - start1)) / (double)CLOCKS_PER_SEC;
+
+	dealocate_state(&copy1);
+	dealocate_state(&copy2);
+	dealocate_equatorial_matrix(&equatorial_state);
+    }
+    
+    printf("B: (%lf, %lf, %lf, %lf, %lf, %lf, %lf, %lf, %lf)\n", cpu_time_used_1, bravyi1, bravyi2, bravyi3, bravyi4, bravyi5, bravyi6, bravyi7, bravyi8);
+    printf("M: (%lf, %lf, %lf, %lf)\n", cpu_time_used_2, me1, me2, me3);
+    dealocate_state(evolved_state);
+    return Py_BuildValue("dd", cpu_time_used_1, cpu_time_used_2);
+}
+
 static PyMethodDef myMethods[] = {
     { "apply_gates_to_basis_state", apply_gates_to_basis_state, METH_VARARGS, "Applies a bunch of gates to an initial computational-basis state"},
     { "apply_gates_to_basis_state_project_and_reduce", apply_gates_to_basis_state_project_and_reduce, METH_VARARGS, "Applies a bunch of gates to an initial computational-basis state, then applies a bunch of z projectors and removes the (now product state) qubits we projected"},
@@ -1653,6 +1830,7 @@ static PyMethodDef myMethods[] = {
     { "magic_sample_2", magic_sample_2, METH_VARARGS, "do the sampling algorithm with fastnorm first"},
     { "measurement_overlap_wrapper", measurement_overlap_wrapper, METH_VARARGS, "compute a computational basis measurement outcome overlap"},
     { "measurement_overlap_wrapper2", measurement_overlap_wrapper2, METH_VARARGS, "compute a computational basis measurement outcome overlap"},
+    { "time_equatorial_prods", time_equatorial_prods, METH_VARARGS, "profile equatorial inner product methods"},
     { NULL, NULL, 0, NULL }
 };
 

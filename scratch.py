@@ -45,7 +45,50 @@ from numpy import linalg
 if __name__ == "__tests-test__":
     cPSCS.tests()
 
+
 if __name__ == "__main__":
+
+    n = 1
+    depth = 1000
+    qubits_range = np.array(range(2,63), dtype=np.int)
+    bravyi_times = np.zeros_like(qubits_range, dtype=np.float)
+    my_times = np.zeros_like(qubits_range, dtype=np.float)
+    repeats=100
+    for i,q in enumerate(qubits_range):
+        for circ in util.random_clifford_circuits(q, depth,n):
+            gateArray = np.zeros(depth, dtype=np.uint8)
+            controlArray = np.zeros(depth, dtype=np.uint)
+            targetArray = np.zeros(depth, dtype=np.uint)
+        
+            for j, gate in enumerate(circ.gates):
+                if isinstance(gate, CXGate):
+                    gateArray[j] = 88 #X
+                    controlArray[j] = gate.control
+                    targetArray[j] = gate.target
+                elif isinstance(gate, CZGate):
+                    gateArray[j] = 90 #Z
+                    controlArray[j] = gate.control
+                    targetArray[j] = gate.target
+                elif isinstance(gate, SGate):
+                    gateArray[j] = 115 #s
+                    targetArray[j] = gate.target
+                elif isinstance(gate, HGate):
+                    gateArray[j] = 104 #h
+                    targetArray[j] = gate.target
+        
+            v1, v2 = cPSCS.time_equatorial_prods(q, 543,repeats, gateArray,controlArray,targetArray)
+            bravyi_times[i] += v1
+            my_times[i] += v2
+            print(q, v1,v2)
+    plt.plot(qubits_range, (bravyi_times/(repeats*n))*1000, label="Bravyi algorithm")
+    plt.plot(qubits_range, (my_times/(repeats*n))*1000, label="My algorithm")
+    plt.legend()
+    plt.grid()
+    plt.show()
+    
+            
+
+if __name__ == "__multi__":
     qubits = 16
     print(qubits)
     circs = 1
@@ -142,13 +185,13 @@ if __name__ == "__main__":
                 print(mean_val, total_time)
                 print("-----------------------------------")
         
-if __name__ == "single-process":
+if __name__ == "__single-process__":
     # do some simulations make some graphs
     qubits = 16
     print(qubits)
     circs = 1
     depth = 5000
-    t= 18
+    t= 10
     print("t=", t)
     #magic_samples = 1000
     #equatorial_samples = 1000
@@ -161,8 +204,8 @@ if __name__ == "single-process":
     s1_time = 0
     s2_time = 0
 
-    epss = [0.1, 0.01,0.001]
-    #epss = [0.0001]
+    #epss = [0.1, 0.01,0.001]
+    epss = [0.1]
     
     delta = 0.01
     gamma = math.log2(4-2*math.sqrt(2))

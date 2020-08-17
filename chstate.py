@@ -3,7 +3,7 @@ import numpy as np
 from dataclasses import dataclass
 import util
 import time
-import myModule
+#import myModule
 @dataclass
 class CHState:
     N : int # number of qubits
@@ -215,19 +215,19 @@ class CHState:
         #newL[-1] = 1
         #im = util.slowZ2ExponentialSum(newM, newL) / 2
         
-        #re  = util.z2ExponentialSum(m2, l2)
-        #l2[-1] = 1
-        #im  = util.z2ExponentialSum(m2, l2)   
-        #re /= 2
-        #im /= 2
+        re  = util.z2ExponentialSum(m2, l2)
+        l2[-1] = 1
+        im  = util.z2ExponentialSum(m2, l2)   
+        re /= 2
+        im /= 2
 
         #delta = time.monotonic()
         #re, im = util.z2DoubleExponentialSum2(newM,newL)
         
         
-        re, im = myModule.exponential_sum(newM,newL)
-        re /= 2
-        im /= 2
+        #re, im = myModule.exponential_sum(newM,newL)
+        #re /= 2
+        #im /= 2
 
         #delta = time.monotonic() - delta
         # re2, im2 = util.z2DoubleExponentialSum2(m2,l2)

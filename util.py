@@ -4,7 +4,7 @@ import gates
 import random
 import measurement
 import itertools
-import myModule
+#import myModule
 
 def a2str(a):
     """
@@ -338,7 +338,7 @@ def z2DoubleExponentialSum(M, L):
             
             m1 = (M[i] + M[:,i])[mask] % np.uint8(2)
             m2 = (M[j] + M[:,j])[mask] % np.uint8(2)
-
+            
             mu1_consts = L[i] + M[i,i] % np.uint8(2)
             mu2_consts = L[j] + M[j,j] % np.uint8(2)
 
