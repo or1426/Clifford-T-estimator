@@ -2,7 +2,7 @@ import numpy as np
 import constants
 import gates
 import random
-import measurement
+#import measurement
 import itertools
 #import myModule
 
@@ -134,9 +134,9 @@ def random_clifford_circuits(qubits, depth, N):
         gs = random.choices(list(params_dict.keys()), k=depth)
         yield gates.cliffords.CompositeCliffordGate([g(*random.sample(range(qubits), k=params_dict[g])) for g in gs])
     
-def random_clifford_circuits_with_z_projectors(qubits, depth, N):
-    for target, a, circuit in zip(random.choices(range(qubits), k=N), random.choices(range(1), k=N), random_clifford_circuits(qubits, depth, N)):
-        yield circuit | measurement.PauliZProjector(target,a)
+# def random_clifford_circuits_with_z_projectors(qubits, depth, N):
+#     for target, a, circuit in zip(random.choices(range(qubits), k=N), random.choices(range(1), k=N), random_clifford_circuits(qubits, depth, N)):
+#         yield circuit | measurement.PauliZProjector(target,a)
 
 def random_clifford_circuits_with_bounded_T(qubits, depth, N, T):
     #some Clifford gate constructors take two params and some take 1

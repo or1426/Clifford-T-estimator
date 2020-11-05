@@ -14,6 +14,7 @@ int QCircuit_free(QCircuit * circ){
     free(circ->tape);
     free(circ);
     circ = NULL;
+    return 0;
 }
 
 /*
@@ -21,10 +22,10 @@ int QCircuit_free(QCircuit * circ){
  * Doubling the length of the tape if necessary
  */
 int QCircuit_append(QCircuit * circ, Gate g){
-    if(circ->last_gate_index == circ->capacity)
+    if(circ->length == circ->capacity)
     {
 	circ->capacity *= 2;
-	circ->tape = realloc(circ->tape, circ->capacity);
+	circ->tape = realloc(circ->tape, circ->capacity*sizeof(Gate));
     }
     
     circ->tape[circ->length] = g;
@@ -34,10 +35,10 @@ int QCircuit_append(QCircuit * circ, Gate g){
 
 QCircuit * QCircuit_daggered(QCircuit * circ){
     QCircuit * new = QCircuit_new();
-    new->capacity = circ->last_gate_index;
-    new->tape = realloc(new->tape, new->capacity);
+    new->capacity = circ->length;
+    new->tape = realloc(new->tape, new->capacity*sizeof(Gate));
 
-    for(size_t i = 0; i <circ->length; i++){
+    for(int i = 0; i <circ->length; i++){
 	if(circ->tape[circ->length-i-1].tag == S){
 	    QCircuit_append(new, (Gate){.tag=S, .target=circ->tape[circ->length-i-1].target, .control = 0});
 	    QCircuit_append(new, (Gate){.tag=S, .target=circ->tape[circ->length-i-1].target, .control = 0});

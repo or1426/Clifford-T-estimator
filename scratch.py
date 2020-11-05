@@ -11,7 +11,7 @@ import util
 import random
 import pickle
 import math
-import qk
+#import qk
 
 import cPSCS
 
@@ -129,19 +129,19 @@ if __name__ == "__multi__":
                 print(mean_val, total_time)
                 print("-----------------------------------")
         
-if __name__ == "__single-process__":
+if __name__ == "__main__":
     # do some simulations make some graphs
-    qubits = 16
+    qubits = 4
     print(qubits)
     circs = 1
     depth = 5000
-    t= 10
+    t= 2
     print("t=", t)
     #magic_samples = 1000
     #equatorial_samples = 1000
     seed = 5952 #random seed we give to the c code to generate random equatorial and magic samples
     # make the w qubits the first 8
-    mask = np.array([1 for _ in range(8)] + [0 for _ in range(8)], dtype=np.uint8)
+    mask = np.array([1 for _ in range(2)] + [0 for _ in range(2)], dtype=np.uint8)
     #project them all on to the 0 state since it doesn't really matter
     aArray = np.zeros_like(mask)
     qk_time = 0
@@ -181,12 +181,13 @@ if __name__ == "__single-process__":
         for i, (a,m) in enumerate(zip(aArray, mask)):
             if m:
                 circ | PauliZProjector(target=i, a=a)
-        d_time = time.monotonic_ns()
-        sim = qk.QiskitSimulator()
-        qk_vector = sim.run(qubits, np.zeros(qubits), circ)
-        qk_val = qk_vector.conjugate() @ qk_vector
-        qk_time += time.monotonic_ns() - d_time
-        print(qk_val)
+        #d_time = time.monotonic_ns()
+        #sim = qk.QiskitSimulator()
+        #qk_vector = sim.run(qubits, np.zeros(qubits), circ)
+        #qk_val = qk_vector.conjugate() @ qk_vector
+        #qk_time += time.monotonic_ns() - d_time
+        #print(qk_val)
+        qk_val = 0.003
         
         #magic_samples = int(round(((2*(math.pow(2,gamma*t/2)+qk_val)**2)/((math.sqrt( (1+relative_eps)*qk_val) - math.sqrt(qk_val))**2))/(math.log(delta/(2*relative_eps*relative_eps*qk_val*qk_val)))))
         #equatorial_samples = int(round(((((1+relative_eps))/(relative_eps))**2)*(-np.log(delta))))
@@ -198,21 +199,27 @@ if __name__ == "__single-process__":
             print(magic_samples)
             print(equatorial_samples)
             #print(qk_val)
-            d_time = time.monotonic_ns()
+            #d_time = time.monotonic_ns()
             
-            v1 = cPSCS.magic_sample_1(qubits,magic_samples, equatorial_samples, seed,  np.copy(gateArray), np.copy(controlArray), np.copy(targetArray), np.copy(aArray), np.copy(mask))
-            s1_time += time.monotonic_ns() - d_time
-            print(v1)
-            print(s1_time/1e9)
+            #v1 = cPSCS.magic_sample_1(qubits,magic_samples, equatorial_samples, seed,  np.copy(gateArray), np.copy(controlArray), np.copy(targetArray), np.copy(aArray), np.copy(mask))
+            #s1_time += time.monotonic_ns() - d_time
+            #print("v1:", v1)
+            #print(s1_time/1e9)
             
-            d_time = time.monotonic_ns()
-            v2 = cPSCS.magic_sample_2(qubits,magic_samples, equatorial_samples, seed,  np.copy(gateArray), np.copy(controlArray), np.copy(targetArray), np.copy(aArray), np.copy(mask))
-            s2_time += time.monotonic_ns() - d_time
+            #d_time = time.monotonic_ns()
+            #v2 = cPSCS.magic_sample_2(qubits,magic_samples, equatorial_samples, seed,  np.copy(gateArray), np.copy(controlArray), np.copy(targetArray), np.copy(aArray), np.copy(mask))
+            #s2_time += time.monotonic_ns() - d_time
             
-            print(v2)
+            #print("v2:", v2)
+
+            v3 = cPSCS.main_simulation_algorithm(qubits, magic_samples, equatorial_samples, seed,  np.copy(gateArray), np.copy(controlArray), np.copy(targetArray), 8, np.copy(aArray))
+
+            print("v3: ", v3)
+
+            
             # print(s2_time/1e9)
             
-            print()
-            print(qk_time/1e9, s1_time/1e9,s2_time/1e9)
-            print("-------------------")
+            #print()
+            #print(qk_time/1e9, s1_time/1e9,s2_time/1e9)
+            #print("-------------------")
 
