@@ -39,6 +39,7 @@ StabTable * StabTable_new(int n, int k);
  */
 int StabTable_free(StabTable * table);
 
+void StabTable_print(StabTable * table);
 /*
  * Applies a CX gate controlled on qubit a targetted on qubit b
  * it is assumed a and b are valid qubit numbers (i.e. < n)

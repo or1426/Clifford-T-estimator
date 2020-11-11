@@ -11,9 +11,11 @@ QCircuit* QCircuit_new(){
 }
 
 int QCircuit_free(QCircuit * circ){
-    free(circ->tape);
-    free(circ);
-    circ = NULL;
+    if(circ != NULL){
+	free(circ->tape);
+	free(circ);
+	circ = NULL;
+    }
     return 0;
 }
 
