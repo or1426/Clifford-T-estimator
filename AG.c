@@ -143,6 +143,25 @@ int StabTable_rowsum(StabTable * table, int h, int i){
     return 0;
 }
 
+unsigned char StabTable_rowsum2(StabTable * table, unsigned char * row, unsigned char phase, int i){
+    unsigned char sum = 2*(phase + table->phases[i]);
+    for(int j = 0; j < table->n; j++){
+        sum += g(table->table[i][j], table->table[i][j+table->n], row[j], row[j+table->n]);
+    }
+    sum %= 4u;
+    for(int j = 0; j < 2*table->n; j++){
+	row[j] ^= table->table[i][j];
+    }
+    if(sum == 0){
+	return 0;
+    }
+    if(sum == 2){
+	return 1;
+    }    
+    return 0;
+}
+
+
 int StabTable_first_non_zero_in_col(StabTable * table, int col, int startpoint){
     for(int i = startpoint; i < table->k; i++){
         if(table->table[i][col] != 0){
@@ -281,8 +300,8 @@ QCircuit * StabTable_simplifying_unitary(StabTable * table){
             }
         }
     }
-    printf("before phase fix\n");
-    StabTable_print(table);
+    //printf("before phase fix\n");
+    //StabTable_print(table);
     //fix the phases
     for(int r = 0; r < table->k; r++){
         if(table->phases[r] != 0){
@@ -290,15 +309,15 @@ QCircuit * StabTable_simplifying_unitary(StabTable * table){
             StabTable_S(table,r);
         }
     }
-    printf("after phase fix\n");
-    StabTable_print(table);
+    //printf("after phase fix\n");
+    //StabTable_print(table);
     //swap the identity matrix to the z part
     for(int r = 0; r < table->k; r++){
         StabTable_H(table, r);
     }
 
-    printf("after swap\n");
-    StabTable_print(table);
+    //printf("after swap\n");
+    //StabTable_print(table);
     return table->circ;
 }
 
@@ -431,23 +450,11 @@ int StabTable_apply_constraints(StabTable * table, int w, int t){
 	table->phases = realloc(table->phases, table->k * sizeof(unsigned char));
     }
 
-    //we can now delete the first w qubits
-    int new_size = table->n - w;
-    for(int s = 0; s < table->k; s++){
-	for(int q = w; q < table->n; q++){
-	    table->table[s][q-w] = table->table[s][q];
-	}
-	for(int q = w; q < table->n; q++){
-	    table->table[s][q-2*w+table->n] = table->table[s][q+table->n];
-	}	
-	table->table[s] = realloc(table->table[s], sizeof(unsigned char) * 2 * new_size);
-    }
-    table->n = new_size;
     
-    //we now have n-w stabilisers on n-w qubits
+    //we now have n-w stabilisers on n qubits
     //time to impose region b constraints
     
-    for(int q=0; q < table->n - t ; q++){ //iterate over all the non-magic qubits
+    for(int q=w; q < table->n - t ; q++){ //iterate over all the non-magic qubits
         int x_and_z_stab= -1; //store the index of the first stab we come to with both x and z = 1 on this qubit
         int x_and_not_z_stab = -1; //store the index of the first stab we come to with x=1, z=0
         int z_and_not_x_stab = -1; //store the index of the first stab we come to with z=1, x=0
@@ -535,38 +542,25 @@ int StabTable_apply_constraints(StabTable * table, int w, int t){
 	table->table = realloc(table->table, sizeof(unsigned char *) * table->k);	
 	table->phases = realloc(table->phases, sizeof(unsigned char) * table->k);
     }
-
-    //now delete the first (n-w) = table->n - t (since table->n = n + t - w at this point) qubits 
-    //at this point we should just be left with t qubits
-    int q_to_delete = table->n - t;
-    new_size = t;
-    for(int s = 0; s < table->k; s++){
-	for(int q = q_to_delete; q < table->n; q++){
-	    table->table[s][q-q_to_delete] = table->table[s][q];
-	}
-	for(int q = q_to_delete; q < table->n; q++){
-	    table->table[s][q-2*q_to_delete+table->n] = table->table[s][q+table->n];
-	}
-	table->table[s] = realloc(table->table[s], sizeof(unsigned char) * 2 * new_size);
-    }
-    table->n = new_size;
-
     
-
     return log_v;
 }
 
-int StabTable_apply_constraints_bad(StabTable * table, int w, int t){
-    int k = 0;
-    StabTable_print(table);
-    printf("{%d, %d}\n", table->k,table->n);
-    for(int q=0; q < table->n - t; q++){ //iterate over all the non-t qubits
-        printf("q = %d\n", q);
+/*
+ * Our magic states are equatorial
+ * so <T|Z|T> = 0
+ * here we delete any stabilisers with a Z in the magic region
+ * which we assume is the last t qubits 
+ * we return the number of qubits which have identities on them in every generator after this deletion
+ */
+int StabTable_apply_T_constraints(StabTable * table, int t){
+    int idents = 0;
+    for(int q=table->n-t; q < table->n; q++){ //iterate over all the magic qubits
         int x_and_z_stab= -1; //store the index of the first stab we come to with both x and z = 1 on this qubit
         int x_and_not_z_stab = -1; //store the index of the first stab we come to with x=1, z=0
         int z_and_not_x_stab = -1; //store the index of the first stab we come to with z=1, x=0
 
-        for(int s=k; s < table->k && (((x_and_z_stab < 0) + (x_and_not_z_stab < 0) + (z_and_not_x_stab < 0)) > 1); s++){//iterate over all stabilisers and find interesting stabilisers
+        for(int s=0; s < table->k && (((x_and_z_stab < 0) + (x_and_not_z_stab < 0) + (z_and_not_x_stab < 0)) > 1); s++){//iterate over all stabilisers and find interesting stabilisers
             if((table->table[s][q] == 1) && (table->table[s][q+table->n] == 1)){
                 x_and_z_stab = s;
             }
@@ -577,6 +571,7 @@ int StabTable_apply_constraints_bad(StabTable * table, int w, int t){
                 z_and_not_x_stab = s;
             }
         }
+
         //there are several cases here
         //either a single z, a single x, a single y or we can generate the whole Pauli group on this qubit
 
@@ -597,225 +592,35 @@ int StabTable_apply_constraints_bad(StabTable * table, int w, int t){
             }
         }
 
-
         if((x_and_z_stab >= 0) && (x_and_not_z_stab >= 0) && (z_and_not_x_stab >= 0)){ //we have all 3
-            //ignore the y one
+            //ignore the y one if we have all 3
             x_and_z_stab = -1;
         }
 
-        printf("%d (%d, %d, %d)\n", q, x_and_not_z_stab, z_and_not_x_stab, x_and_z_stab);
-        StabTable_print(table);
-        printf("\n");
 
-        //now the only possibilities are that we have an x_and_z, an x a z or an x and a z
-        //if we have an z move it to the "top"
-        if(z_and_not_x_stab >= 0){
-            printf("Swapping z to top\n");
-            StabTable_print(table);printf("\n");
-            StabTable_swap_rows(table, k, z_and_not_x_stab);
-            StabTable_print(table);
-            if(k == x_and_not_z_stab){
-                x_and_not_z_stab = z_and_not_x_stab;
-            }
-            z_and_not_x_stab = k;
-            k += 1;
-        }
-        //if we have an x move it to the "top"
-        if(x_and_not_z_stab >= 0){
-            printf("Swapping x to top\n");
-            StabTable_print(table);printf("\n");
-            StabTable_swap_rows(table, k, x_and_not_z_stab);
-            StabTable_print(table);
-            if(k == z_and_not_x_stab){
-                z_and_not_x_stab = x_and_not_z_stab;
-            }
-            x_and_not_z_stab = k;
-            k += 1;
-        }
-        //if we have a xz move it to the "top"
-        if(x_and_z_stab >= 0){
-            StabTable_swap_rows(table, k, x_and_z_stab);
-            x_and_z_stab = k;
-            k += 1;
-        }
-        printf("%d (%d, %d, %d)\n", q, x_and_not_z_stab, z_and_not_x_stab, x_and_z_stab);
-        StabTable_print(table);
-        printf("\n");
-        //kill anything left on this qubit
-        for(int s = 0; s < table->k; s++){
-            if((s != x_and_z_stab) && (s != x_and_not_z_stab) && (s != z_and_not_x_stab)){
-                if((table->table[s][q] == 1) && (table->table[s][q+table->n] == 1) && (x_and_z_stab >= 0)){
-                    StabTable_rowsum(table, s, x_and_z_stab);
-                }
-
-                if(table->table[s][q] == 1 && x_and_not_z_stab >= 0){
-                    StabTable_rowsum(table, s, x_and_not_z_stab);
-                }
-
-                if(table->table[s][q+table->n] == 1 && z_and_not_x_stab >= 0){
-                    StabTable_rowsum(table, s, z_and_not_x_stab);
-                }
-            }
-        }
-
-        StabTable_print(table);
-        printf("\n");
-
-        //Case 2 - we're dealing with a measured qubit and Z_q commutes with every generator
-        if((q < w) && (x_and_not_z_stab < 0) && (x_and_z_stab < 0)){
-            // in this case the (k-1)^th stabiliser is of the form I \otimes Z_q \otimes something
-            //where "something" is in the row image of the rows below this one
-            //which are all of the form I \otimes I_q \otimes (other somethings)
-            //due to previous simplifications
-            //we want to find a bunch of row additions that make the (k-1)^th stabiliser into I \otimes Z_q \otimes I
-            //we basically use gaussian elimination here on the last table->k - k generators
-
-            for(int j = q+1; j < table->n; j++){
-                if((table->table[k-1][j] == 1) && (table->table[k-1][j+table->n] == 1)){
-                    int resource_row = -1;
-                    for(int row = k+1; row < table->k; row++){
-                        if((table->table[row][j] == 1) && (table->table[row][j+table->n] == 1)){
-                            if(resource_row < 0){
-                                resource_row = row;
-                                StabTable_rowsum(table, k-1, resource_row);
-                            }else{
-                                StabTable_rowsum(table, row, resource_row);
-                            }
-                        }
-                    }
-                }
-
-                if(table->table[k-1][j] == 1){
-                    int resource_row = -1;
-                    for(int row = k; row < table->k; row++){
-                        if(table->table[row][j] == 1){
-                            if(resource_row < 0){
-                                resource_row = row;
-                                StabTable_rowsum(table, k-1, resource_row);
-                            }else{
-                                StabTable_rowsum(table, row, resource_row);
-                            }
-                        }
-                    }
-                }
-
-                if(table->table[k-1][j+table->n] == 1){
-                    int resource_row = -1;
-                    for(int row = k; row < table->k; row++){
-                        if(table->table[row][j+table->n] == 1){
-                            if(resource_row < 0){
-                                resource_row = row;
-                                StabTable_rowsum(table, k-1, resource_row);
-                            }else{
-                                StabTable_rowsum(table, row, resource_row);
-                            }
-                        }
-                    }
-                }
-            }
-        }
+	if((z_and_not_x_stab >= 0) && (x_and_not_z_stab < 0)){
+	    //printf("z_and_not_x_stab = %d\ntable->table[z_and_not_x_stab][q+table->n] = %u\ntable->table[z_and_not_x_stab][q] = %u\n", z_and_not_x_stab,table->table[z_and_not_x_stab][q+table->n],table->table[z_and_not_x_stab][q]);
+	    int idents_this_col = 0;
+	    //kill all other z stuff on this qubit
+	    for(int s = 0; s < table->k; s++){
+		if((s != z_and_not_x_stab) && (table->table[s][q+table->n] == 1)){
+		    StabTable_rowsum(table,s, z_and_not_x_stab);
+		}
+		if((table->table[s][q] == 0) && (table->table[s][q+table->n] == 0)){
+		    idents_this_col += 1;
+		}		
+	    }
+	    //now delete the z guy
+	    StabTable_swap_rows(table, z_and_not_x_stab, table->k-1);
+	    free(table->table[table->k-1]);
+	    table->k = table->k-1;
+	    table->table = (unsigned char **)realloc(table->table, table->k*sizeof(unsigned char *));
+	    table->phases = (unsigned char *)realloc(table->phases, table->k*sizeof(unsigned char));
+	    
+	    if(idents_this_col == table->k){
+		idents += 1;
+	    }	    	    
+	}		
     }
-    StabTable_print(table);
-
-    int log_v = 0; //this keeps track of duplicated sums this increases by 1 if a measurement was non-constraining
-    unsigned char * deleted_stabs = calloc(table->k, sizeof(unsigned char)); //put a 1 here for qubits we will delete
-
-    //so now our stabiliser table has the following format
-    //on each of the first table->n - t qubits
-    //there is either 1 or two stabilisers which are not the identity on that qubit
-    //if there are two then they are X and Z
-    //if there is 1 then its X, Y or Z
-    //we have an additional restriction which is that on the measured qubits if all the stabs commute with Z_q
-    //then one of our generators is exactly (\pm 1) Z_q, i.e. this generator is the identity on everything else
-
-    //now we deal with the measured qubits
-    for(int q = 0; q < w; q++){
-        //these are going to be the (up to) two stabs that are non-trivial on this qubit
-        int s1 = -1;
-        int s2 = -1;
-
-        for(int s = 0; (s < table->k) && (s2 < 0); s++){
-            if((table->table[s][q] != 0) || (table->table[s][q+table->n] != 0)){
-                if(s1 < 0){
-                    s1 = s;
-                }else{
-                    s2 = s;
-                }
-            }
-            //if we have two stabs lets make sure s1 is the x guy
-            if(s1 >= 0 && s2 >= 0){
-                if(table->table[s1][q] == 0){
-                    StabTable_swap_rows(table, s1,s2);
-                }
-            }
-
-            //in this case we just delete the first stab
-            deleted_stabs[s1] = 1;
-            //we have two cases
-            //either there are gens that do not commute with Z_q or they all commute
-            //if there is a non-commuting one things are fine - the measurement on this qubit has 50/50 outcomes
-            printf("s1 = %d\n", s1);
-            if(table->table[s1][q] == 0){
-                //the only stab is Z (on this qubit)
-                //we ensured that if the stab has a Z on this qubit then the stab is equal to (\pm 1) * Z_q
-                if(table->phases[s1] == 0){
-                    if(log_v >= 0){
-                        log_v += 1;
-                    }
-                }else{
-                    log_v = -1;
-                }
-            }
-        }
-    }
-
-    //now we deal with the non-measured qubits
-    for(int q = w; q < table->n - t; q++){
-        //these are going to be the (up to) two stabs that are non-trivial on this qubit
-        int s1 = -1;
-        int s2 = -1;
-
-        for(int s = 0; (s < table->k) && (s2 < 0); s++){
-            if((table->table[s][q] != 0) || (table->table[s][q+table->n] != 0)){
-                if(s1 < 0){
-                    s1 = s;
-                }else{
-                    s2 = s;
-                }
-            }
-
-            if(s1 >= 0){
-                deleted_stabs[s1] = 1;
-            }
-            if(s2 >= 0){
-                deleted_stabs[s2] = 1;
-            }
-        }
-    }
-
-    //so now we go through the list of stabilisers
-    //and delete the ones with deleted_stabs indicator set to 1
-    int old_max_index = table->k;
-    int new_index = 0;
-    for(int old_index = 0; old_index < old_max_index; old_index++){
-        if(deleted_stabs[old_index] == 0){ //not deleted so we just copy it across
-            table->table[new_index] = table->table[old_index];
-            table->phases[new_index] = table->phases[old_index];
-            new_index += 1;
-        }else{ //this stab is deleted
-            free(table->table[old_index]);
-            table->table[old_index] = NULL;
-        }
-    }
-    table->k = new_index;
-    realloc(table->table, table->k*sizeof(unsigned char *));
-
-    /*relevant info to return*/
-    //log_v
-    //table
-
-
-    free(deleted_stabs);
-    return log_v;
-
+    return idents;
 }

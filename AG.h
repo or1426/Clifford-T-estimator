@@ -79,6 +79,18 @@ int StabTable_X(StabTable * table, int a);
 StabTable * StabTable_copy(StabTable * input);
 
 
+int StabTable_first_non_zero_in_col(StabTable * table, int col, int startpoint);
+int StabTable_first_non_zero_in_row(StabTable * table, int row, int startpoint);
+int StabTable_swap_rows(StabTable * table, int i, int j);
+int StabTable_rowsum(StabTable * table, int h, int i);
+
+
+
+/* Does not change the table at all
+ * updates row to be row ^ table_i
+ * returns the update to the phase of row (0 or 1)
+ */
+unsigned char StabTable_rowsum2(StabTable * table, unsigned char * row, unsigned char phase, int i);
 /*
  * Apply constraints arising from the fact that we measure the first w qubits and project the last t onto T gates
  * In particular we kill stabilisers if qubits [0, w) get killed by taking the expectation value <0| P |0>
@@ -87,6 +99,16 @@ StabTable * StabTable_copy(StabTable * input);
  * we return the degeneract factor log_v, which is set to -1 if the probability was 0
  */
 int StabTable_apply_constraints(StabTable * table, int w, int t);
+
+/*
+ * Our magic states are equatorial
+ * so <T|Z|T> = 0
+ * here we delete any stabilisers with a Z in the magic region
+ * which we assume is the last t qubits 
+ * we return the number of qubits which have identities on them in every generator after this deletion
+ */
+
+int StabTable_apply_T_constraints(StabTable * table, int t);
 
 /*
  * create a QCircuit that brings the state represented by this tableau to the state|0><0|^k \otimes I^(n-k) / (2^(n-k))

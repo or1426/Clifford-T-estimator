@@ -12,6 +12,9 @@ import random
 import pickle
 import math
 import qk
+from qiskit.providers.aer import StatevectorSimulator, QasmSimulator
+import sys
+import qiskit
 
 import cPSCS
 
@@ -32,28 +35,158 @@ def eq(a,b,eps=1e-10):
 
 from numpy import linalg
 
-if __name__ == "__deterministic-test__":
+
+if __name__ == "__qk_test_1__":
+    qubitss = np.array(range(15,25))
     
-    qubits = 60
-    measured_qubits = 1
+    t = 30
+    depth = 1000
+    circs = 100
+    measured_qubits = 10
+
+    aArray = np.array([0 for _ in range(measured_qubits)], dtype=np.uint8)
+    #print("qubits = ", qubits)
+    #print("measured_qubits = ", measured_qubits)
+    #print("t = ", t)
+    #backend_options = {"max_parallel_threads": 1,}
+    #backend = qk.Aer.get_backend("statevector_simulator", max_parallel_threads=1)
+    #backend = Aer.get_backend("statevector_simulator")
     
-    tests = 100
-    for _ in range(tests):
-        circ = []
-        for i in range(qubits):
-            if random.choice([0,1]) == 0:
-                circ.append(HGate(i))
-                circ.append(SGate(i))
-                circ.append(SGate(i))
-                circ.append(HGate(i))
+    #backend = QasmSimulator(method='statevector', max_parallel_threads=1)
+    #backend = StatevectorSimulator(*{"max_parallel_threads":6})
+
+    #qk_times = []
+    #comp_times = []
+    for qubits in qubitss:        
+        for  i, circ in enumerate(util.random_clifford_circuits_with_bounded_T(qubits, depth, circs, t)):
+            print(qubits,i)
+            gateArray = np.zeros(depth, dtype=np.uint8)
+            controlArray = np.zeros(depth, dtype=np.uint)
+            targetArray = np.zeros(depth, dtype=np.uint)
+            qkcirc = qiskit.QuantumCircuit(qubits)
+            for j, gate in enumerate(circ.gates):
+                if isinstance(gate, CXGate):
+                    gateArray[j] = 88 #X
+                    controlArray[j] = gate.control
+                    targetArray[j] = gate.target
+                    qkcirc.cx(target_qubit=gate.target, control_qubit=gate.control)
+                elif isinstance(gate, CZGate):
+                    gateArray[j] = 90 #Z
+                    controlArray[j] = gate.control
+                    targetArray[j] = gate.target
+                    qkcirc.cx(target_qubit=gate.target, control_qubit=gate.control)
+                elif isinstance(gate, SGate):
+                    gateArray[j] = 115 #s
+                    targetArray[j] = gate.target
+                    qkcirc.s(gate.target)
+                elif isinstance(gate, HGate):
+                    gateArray[j] = 104 #h
+                    targetArray[j] = gate.target
+                    qkcirc.h(gate.target)
+                elif isinstance(gate, TGate):
+                    gateArray[j] = 116 # t
+                    targetArray[j] = gate.target
+                    qkcirc.t(gate.target)
+                    
+            for i  in range(measured_qubits):
+                circ | PauliZProjector(target=i, a=aArray[i])
+                    
+            #print("starting qk sim")
+            #print("1")
+            sim = qk.QiskitSimulator()
+            #print("2")
+            d_time = time.monotonic()
+            qk_vector = sim.run(qubits, np.zeros(qubits,dtype=np.uint8), circ)
+            qk_time = time.monotonic - d_time
+            #job = qiskit.execute(qkcirc, backend=backend, backend_options={"max_parallel_threads":6})
+            #qk_vector = job.result().get_statevector(qkcirc)
+
+            qk_val = qk_vector.conjugate() @ qk_vector
+
+            #qk_times.append(qk_time)
+            #print("ended qk sim")
+            #print("starting CALCULATE sim")
+            #print("3")
+            d_time = time.monotonic()
+            comp_val = cPSCS.calculate_algorithm(qubits, measured_qubits,gateArray, controlArray, targetArray, aArray)
             
-        circ = CompositeCliffordGate(circ)
-        depth = len(circ.gates)
+            comp_time = time.monotonic() - d_time
+            #print("4")
+            #print("ended CALCULATE sim")
+            #with open("qk_calculate_comparison.txt", "a") as f:
+            print(qubits, qk_val, comp_val, qk_time, comp_time)
+            
+if __name__ == "__main__":
+    qubits = int(sys.argv[1])
+    t = 30
+    depth = 1000
+    circs = 100
+    measured_qubits = 10
+
+    aArray = np.array([0 for _ in range(measured_qubits)], dtype=np.uint8)
+    
+    for  i, circ in enumerate(util.random_clifford_circuits_with_bounded_T(qubits, depth, circs, t)):
+        print(qubits,i)
         gateArray = np.zeros(depth, dtype=np.uint8)
         controlArray = np.zeros(depth, dtype=np.uint)
         targetArray = np.zeros(depth, dtype=np.uint)
-        aArray = np.array([0 for _ in range(measured_qubits)], dtype=np.uint8)
+        for j, gate in enumerate(circ.gates):
+            if isinstance(gate, CXGate):
+                gateArray[j] = 88 #X
+                controlArray[j] = gate.control
+                targetArray[j] = gate.target            
+            elif isinstance(gate, CZGate):
+                gateArray[j] = 90 #Z
+                controlArray[j] = gate.control
+                targetArray[j] = gate.target                
+            elif isinstance(gate, SGate):
+                gateArray[j] = 115 #s
+                targetArray[j] = gate.target
+            elif isinstance(gate, HGate):
+                gateArray[j] = 104 #h
+                targetArray[j] = gate.target
+            elif isinstance(gate, TGate):
+                gateArray[j] = 116 # t
+                targetArray[j] = gate.target
+                    
+        for i  in range(measured_qubits):
+            circ | PauliZProjector(target=i, a=aArray[i])
+                    
+        sim = qk.QiskitSimulator()
+
+        d_time = time.monotonic()
+        qk_vector = sim.run(qubits, np.zeros(qubits,dtype=np.uint8), circ)
+        qk_val = qk_vector.conjugate() @ qk_vector
+        qk_time = time.monotonic() - d_time
+        
+        d_time = time.monotonic()
+        comp_val = cPSCS.calculate_algorithm(qubits, measured_qubits,gateArray, controlArray, targetArray, aArray)
+        comp_time = time.monotonic() - d_time
+            
+        with open("qk_calculate_comparison_{}.txt".format(qubits), "a") as f:
+            print(qubits, qk_val, comp_val, qk_time, comp_time, file=f)
+            
+            
+
+if __name__ == "__compress-test__":
+    qubits = 50
+    t = 40
+    depth = 100000
+    circs = 10000
+    measured_qubits = 10
+
+    aArray = np.array([0 for _ in range(measured_qubits)], dtype=np.uint8)
+    #print("qubits = ", qubits)
+    #print("measured_qubits = ", measured_qubits)
+    #print("t = ", t)
     
+    data = []
+    for  i, circ in enumerate(util.random_clifford_circuits_with_bounded_T(qubits, depth, circs, t)):
+        print(i)
+        gateArray = np.zeros(depth, dtype=np.uint8)
+        controlArray = np.zeros(depth, dtype=np.uint)
+        targetArray = np.zeros(depth, dtype=np.uint)
+        
         for j, gate in enumerate(circ.gates):
             if isinstance(gate, CXGate):
                 gateArray[j] = 88 #X
@@ -72,9 +205,15 @@ if __name__ == "__deterministic-test__":
             elif isinstance(gate, TGate):
                 gateArray[j] = 116 # t
                 targetArray[j] = gate.target
-        cPSCS.print_v_r_info(qubits, measured_qubits, gateArray, controlArray, targetArray, aArray)
+        data.append(cPSCS.v_r_info(qubits, measured_qubits, gateArray, controlArray, targetArray, aArray))
+
+
+    with open("v_r_data2.pkl", "wb") as f:
+        pickle.dump(data, f)
+                    
+        
     
-if __name__ == "__main__":
+if __name__ == "__v_r__":
     qubits = 100
     t = 100
     depth = 1000
@@ -175,7 +314,7 @@ if __name__ == "__test__":
 if __name__ == "__multi__":
     qubits = 16
     print(qubits)
-    circs = 10
+    circs = 1
     depth = 5000
     t= 10
     print("t=", t)
@@ -195,10 +334,11 @@ if __name__ == "__multi__":
     
     delta = 0.001
     gamma = math.log2(4-2*math.sqrt(2))
-    seed = 43246
+    seed = 411111
+    compute_threshold = 10
     random.seed(seed)
     print("seed: ", seed)
-    threads = 12
+    threads = 1
     for  i, circ in enumerate(util.random_clifford_circuits_with_bounded_T(qubits, depth, circs, t)):
         gateArray = np.zeros(depth, dtype=np.uint8)
         controlArray = np.zeros(depth, dtype=np.uint)
@@ -258,14 +398,14 @@ if __name__ == "__multi__":
                     
             def run_algorithm_1(seed):
                 d_time = time.monotonic()
-                v1 = cPSCS.magic_sample_1(qubits,magic_samples, int(math.ceil(equatorial_samples/threads)), seed,  np.copy(gateArray), np.copy(controlArray), np.copy(targetArray), np.copy(aArray), np.copy(mask))
+                v1 = cPSCS.magic_sample_1(qubits, magic_samples, int(math.ceil(equatorial_samples/threads)), seed,  np.copy(gateArray), np.copy(controlArray), np.copy(targetArray), np.copy(aArray), np.copy(mask))
                 s1_time = time.monotonic() - d_time
 
                 return (v1, s1_time)
             
             def run_main_algorithm(seed):
                 d_time = time.monotonic()
-                v1 = cPSCS.main_simulation_algorithm(qubits,magic_samples, int(math.ceil(equatorial_samples/threads)), seed,  8, np.copy(gateArray), np.copy(controlArray), np.copy(targetArray), np.copy(aArray))
+                v1 = cPSCS.main_simulation_algorithm(qubits,compute_threshold,magic_samples, int(math.ceil(equatorial_samples/threads)), seed,  8, np.copy(gateArray), np.copy(controlArray), np.copy(targetArray), np.copy(aArray))
                 s1_time = time.monotonic() - d_time
 
                 return (v1, s1_time)
@@ -280,16 +420,16 @@ if __name__ == "__multi__":
             
 
             with Pool(threads) as p:
-                ans1 = p.map(run_algorithm_1, [random.randrange(1,10000) for _ in range(threads)])
-                total_time1 = 0
-                mean_val1 = 0
+                #ans1 = p.map(run_algorithm_1, [random.randrange(1,10000) for _ in range(threads)])
+                #total_time1 = 0
+                #mean_val1 = 0
                 
-                for val, time_val in ans1:
-                    mean_val1 += val/threads
-                    total_time1 += time_val
+                #for val, time_val in ans1:
+                #    mean_val1 += val/threads
+                #    total_time1 += time_val
                     
                 #print(ans)
-                print("algorithm_1:     ", mean_val1, total_time1)
+                #print("algorithm_1:     ", mean_val1, total_time1)
                 
                 ans2 = p.map(run_main_algorithm, seedvec)
                 total_time2 = 0
@@ -300,16 +440,86 @@ if __name__ == "__multi__":
                     total_time2 += time_val
                 print("main_algorithm:  ", mean_val2, total_time2)
                 
-                ans3 = p.map(run_main_algorithm2, seedvec)
-                total_time3 = 0
-                mean_val3 = 0
+                #ans3 = p.map(run_main_algorithm2, seedvec)
+                #total_time3 = 0
+                #mean_val3 = 0
                 
-                for val, time_val in ans3:
-                    mean_val3 += val/threads
-                    total_time3 += time_val
-                print("main_algorithm2: ", mean_val3, total_time3)
+                #for val, time_val in ans3:
+                #    mean_val3 += val/threads
+                #    total_time3 += time_val
+                #print("main_algorithm2: ", mean_val3, total_time3)
                 print("-----------------------------------")
+
+if __name__ == "__lhs_rank_test___":
+    qubits = 40
+    print(qubits)
+    circs = 10000
+    depth = 10000
+    t= 50
+    print("t=", t)
+    measured_qubits = 10
+    
+    #magic_samples = 1000
+    #equatorial_samples = 1000
+    #seed = 5952 #random seed we give to the c code to generate random equatorial and magic samples
+    # make the w qubits the first 8
+    mask = np.array([1 for _ in range(measured_qubits)] + [0 for _ in range(qubits-measured_qubits)], dtype=np.uint8)
+    #project them all on to the 0 state since it doesn't really matter
+    aArray = np.zeros_like(mask)
+
+    #seed = 411111
+    #random.seed(seed)
+    data = []
+    xs = []
+    ys = []
+    #print("seed: ", seed)
+    for  i, circ in enumerate(util.random_clifford_circuits_with_bounded_T(qubits, depth, circs, t)):
+        #print(i)
+        gateArray = np.zeros(depth, dtype=np.uint8)
+        controlArray = np.zeros(depth, dtype=np.uint)
+        targetArray = np.zeros(depth, dtype=np.uint)
         
+        for j, gate in enumerate(circ.gates):
+            if isinstance(gate, CXGate):
+                gateArray[j] = 88 #X
+                controlArray[j] = gate.control
+                targetArray[j] = gate.target
+            elif isinstance(gate, CZGate):
+                gateArray[j] = 90 #Z
+                controlArray[j] = gate.control
+                targetArray[j] = gate.target
+            elif isinstance(gate, SGate):
+                gateArray[j] = 115 #s
+                targetArray[j] = gate.target
+            elif isinstance(gate, HGate):
+                gateArray[j] = 104 #h
+                targetArray[j] = gate.target
+            elif isinstance(gate, TGate):
+                gateArray[j] = 116 # t
+                targetArray[j] = gate.target
+
+        val = cPSCS.lhs_rank_info(qubits, measured_qubits, gateArray, controlArray, targetArray, aArray)
+        print(i, val)
+        if type(val) == type(tuple()) and len(val) == 4:
+            data.append(val)
+            #xs.append(val[1])
+            #ys.append(val[2])
+            #print(xs[-1], ys[-1])
+        else:
+            print("inconsistent")
+        
+    import numpy as np
+    from matplotlib import pyplot as plt
+    data = np.array(data)
+    m = min(data[:,3])
+    M = max(data[:,3])
+    bins = np.array(range(m, M+1))
+    plt.hist(data[:,3],bins=bins)
+    plt.title("With new T contraints")
+    plt.xlabel("rank")
+    plt.ylabel("count")
+    plt.show()
+            
 if __name__ == "__single-process__":
     # do some simulations make some graphs
     qubits = 16
