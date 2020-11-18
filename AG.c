@@ -31,8 +31,9 @@ int StabTable_free(StabTable * table){
         free(table->table[i]);
     }
     free(table->table);
+    free(table->phases);
     QCircuit_free(table->circ);
-    free(table);
+    free(table);    
     table = NULL;
     return 0;
 }

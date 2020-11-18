@@ -480,7 +480,23 @@ static CHForm * compute_CHForm(int n, PyArrayObject * F, PyArrayObject *G, PyArr
     return state;
 }
 
-static PyObject * CHForm_to_python_tuple(CHForm * state){
+
+static CHForm * python_tuple_to_CHForm(PyObject * tuple){
+    PyObject * py_n = PyTuple_GetItem(tuple, 0);
+    PyArrayObject * py_F = (PyArrayObject *)PyTuple_GetItem(tuple, 1);
+    PyArrayObject * py_G = (PyArrayObject *)PyTuple_GetItem(tuple, 2);
+    PyArrayObject * py_M = (PyArrayObject *)PyTuple_GetItem(tuple, 3);
+    PyArrayObject * py_g = (PyArrayObject *)PyTuple_GetItem(tuple, 4);
+    PyArrayObject * py_v = (PyArrayObject *)PyTuple_GetItem(tuple, 5);
+    PyArrayObject * py_s = (PyArrayObject *)PyTuple_GetItem(tuple, 6);
+    PyObject * py_phase = PyTuple_GetItem(tuple, 7);
+
+    int n = PyLong_AsLong(py_n);
+    return compute_CHForm(n, py_F, py_G, py_M, py_g, py_v, py_s, PyComplex_AsCComplex(py_phase));
+    
+}
+
+static PyObject * CHForm_to_python_tuple(CHForm * state){    
     const long int dimensions1[1] = {state->n};
     const long int dimensions2[2] = {state->n, state->n};
 
@@ -493,6 +509,7 @@ static PyObject * CHForm_to_python_tuple(CHForm * state){
 
     for(int i = 0; i < state->n; i++){
         for(int j = 0; j < state->n; j++){
+	    //printf("(%d, %d)\n",i,j);
             F->data[i*F->strides[0] + j*F->strides[1]] = (unsigned char)((state->F[i] >> j) & ONE);
             G->data[i*G->strides[0] + j*G->strides[1]] = (unsigned char)((state->G[i] >> j) & ONE);
             M->data[i*M->strides[0] + j*M->strides[1]] = (unsigned char)((state->M[i] >> j) & ONE);
@@ -2003,10 +2020,10 @@ static PyObject * main_simulation_algorithm(PyObject* self, PyObject* args){
     int measured_qubits;
     int magic_samples;
     int equatorial_samples;
-    int compute_threshold;
+
     unsigned int seed;
     //printf("1\n");
-    if (!PyArg_ParseTuple(args, "iiiiiiO!O!O!O!", &n, &compute_threshold, &magic_samples, &equatorial_samples, &seed, &measured_qubits,
+    if (!PyArg_ParseTuple(args, "iiiiiO!O!O!O!", &n, &magic_samples, &equatorial_samples, &seed, &measured_qubits,
                           &PyArray_Type, &gates,
                           &PyArray_Type, &controls,
                           &PyArray_Type, &targets,
@@ -2059,81 +2076,18 @@ static PyObject * main_simulation_algorithm(PyObject* self, PyObject* args){
 
     //in the sequel we will assume that the CB measurement outcome we are interested in at the end is |0...0>
     //we "fix" this by applying a bunch of X gates to the measured qubits here
-    //for(int i = 0; i < measured_qubits; i++){
-    //   if((unsigned char)a->data[i*a->strides[0]]){
-    //       StabTable_X(state, i);
-    //   }
-    //}
+    for(int i = 0; i < measured_qubits; i++){
+       if((unsigned char)a->data[i*a->strides[0]]){
+           StabTable_X(state, i);
+       }
+    }
 
 
     int log_v = StabTable_apply_constraints(state, measured_qubits, t);
     if(log_v < 0){
         return PyComplex_FromDoubles(0., 0.);
     }
-    //at this point the variable state contains the long G guys
-    {
-        StabTable * longG = StabTable_copy(state);
-        //now we evolve these back in time with V
-
-        for(int i = gates->dimensions[0]-1; i >= 0 ; i--){
-            //printf("%d, %c, %d, %d\n", i, gates->data[i*gates->strides[0]],controls->data[i*controls->strides[0]], targets->data[i*targets->strides[0]]);
-            switch((char)gates->data[i*gates->strides[0]]) {
-            case CX:
-                StabTable_CX(longG, (*(unsigned int *)PyArray_GETPTR1(controls,i)), (*(unsigned int *)PyArray_GETPTR1(targets,i)));
-                break;
-            case CZ:
-                StabTable_CZ(longG, (*(unsigned int *)PyArray_GETPTR1(controls,i)), (*(unsigned int *)PyArray_GETPTR1(targets,i)));
-                break;
-            case S:
-                StabTable_S(longG, (*(unsigned int *)PyArray_GETPTR1(targets,i)));
-                StabTable_S(longG, (*(unsigned int *)PyArray_GETPTR1(targets,i)));
-                StabTable_S(longG, (*(unsigned int *)PyArray_GETPTR1(targets,i)));
-                break;
-            case H:
-                StabTable_H(longG, (*(unsigned int *)PyArray_GETPTR1(targets,i)));
-                break;
-            }
-        }
-
-        StabTable_print(longG);
-        longG->n = longG->n - t;
-        for(int i = 0; i < longG->k; i++){
-            for(int j = 0; j < longG->n; j++){
-                longG->table[i][j+longG->n] = longG->table[i][j+longG->n + t];
-            }
-            longG->table[i] = realloc(longG->table[i], 2*(longG->n)*sizeof(unsigned char));
-        }
-        StabTable_print(longG);
-        //now we have to do row echelon form on longG to work out the rank
-        int h = 0;
-        int k = longG->n;
-        int rank = 0;
-        while(h < longG->k && k < 2*longG->n){
-            int poss_pivot = StabTable_first_non_zero_in_col(longG, k, h);
-            if(poss_pivot < 0){
-                k += 1;
-            }else{
-                int pivot = poss_pivot; //now known to be non-negative
-                if(pivot != h){
-                    //swap rows h and pivot of the table
-                    StabTable_swap_rows(longG,h,pivot);
-                }
-                for(int j = 0; j < longG->k; j++){
-                    if((j != h) && (longG->table[j][k] != 0)){
-                        StabTable_rowsum(longG,j,h);
-                    }
-                }
-                h += 1;
-                k += 1;
-                rank += 1;
-            }
-        }
-
-        printf("Rank = %d\n", rank);
-        StabTable_print(longG);
-        StabTable_free(longG);
-    }
-
+    
     //now delete the first (n) = table->n - t (since table->n = n + t at this point) qubits
     //at this point we should just be left with t qubits
     int q_to_delete = state->n - t;
@@ -2149,66 +2103,6 @@ static PyObject * main_simulation_algorithm(PyObject* self, PyObject* args){
     }
     state->n = new_size;
 
-    //printf("2:\n");
-    //StabTable_print(state);
-    //printf("\n");
-    //printf("log_v = %d\n", log_v);
-    //printf("log_v = %d\nstate->n = %d\nstate->k = %d\n", log_v, state->n, state->k);
-
-
-    if(state->k < compute_threshold){
-        //we explicitly compute the sum appearing in 10
-        uint_bitarray_t full_mask = 0u;
-        for(int i = 0; i < state->k; i++){
-            full_mask |= (ONE << i);
-        }
-        double complex acc = 0.;
-        for(uint_bitarray_t mask = 0u; mask < full_mask; mask++){
-            unsigned char * row = calloc(2*state->n, sizeof(unsigned char));
-            unsigned char phase = 0;
-            //we do the element of the sum corresponding to the bits of mask being 1
-            for(int j = 0; j < state->k; j++){
-                if((mask >> j) & ONE){
-                    phase = StabTable_rowsum2(state, row, phase, j);
-                }
-            }
-            //so now (row, phase) indicate a particular length t string of pauli matrices
-            //and we want to compute <T|^t (row,phase |T>^t
-            int ICount = 0;
-            int XCount = 0;
-            int YCount = 0;
-            int ZCount = 0;
-
-            for(int j = 0; j < state->n; j++){
-                if(row[j] == 0 && row[j+state->n] == 0){
-                    ICount += 1;
-                }
-                if(row[j] == 1 && row[j+state->n] == 0){
-                    XCount += 1;
-                }
-                if(row[j] == 0 && row[j+state->n] == 1){
-                    ZCount += 1;
-                }
-                if(row[j] == 1 && row[j+state->n] == 1){
-                    YCount += 1;
-                }
-            }
-
-            double complex val = cpowl(1./sqrt(2), XCount + YCount);
-            if(ZCount == 0){
-                if(((phase + YCount) % 2) == 0){
-                    acc += val;
-                }else{
-                    acc -= val;
-                }
-            }
-            free(row);
-        }
-        acc *= powl(2., log_v - measured_qubits);
-        printf("COMPUTE:\n");
-        printf("state->k = %d, calculate_threshold = %d\n", state->k, compute_threshold);
-        printf("COMPUTED value = %.10lf + %.10lf I\n", creal(acc) , cimag(acc));
-    }
 
     QCircuit * W = StabTable_simplifying_unitary(state);
     //printf("after computing W\n");
@@ -2533,7 +2427,6 @@ static PyObject * main_simulation_algorithm2(PyObject* self, PyObject* args){
         }
     }
 
-
     int log_v = StabTable_apply_constraints(state, measured_qubits, t);
     //printf("log_v = %d\n", log_v);
     if(log_v < 0){
@@ -2544,14 +2437,20 @@ static PyObject * main_simulation_algorithm2(PyObject* self, PyObject* args){
     /* //it is still on n+t qubits */
     /* //but the first n qubits are trivial (the stabs are all the identity there) */
     /* //we can just delete them */
-    /* for(int s = 0; s < state->k; s++){ */
-    /*  for(int i = 0; i < t; i++){ */
-    /*      state->table[s][i] = state->table[s][i+n]; */
-    /*      state->table[s][i+t] = state->table[s][i+t+n]; */
-    /*  } */
-    /*  state->table[s] = realloc(state->table[s], sizeof(unsigned char) * t); */
-    /* } */
-    /* state->n = t; */
+    //now delete the first (n) = table->n - t (since table->n = n + t at this point) qubits
+    //at this point we should just be left with t qubits
+    int q_to_delete = state->n - t;
+    int new_size = t;
+    for(int s = 0; s < state->k; s++){
+        for(int q = q_to_delete; q < state->n; q++){
+            state->table[s][q-q_to_delete] = state->table[s][q];
+        }
+        for(int q = q_to_delete; q < state->n; q++){
+            state->table[s][q-2*q_to_delete+state->n] = state->table[s][q+state->n];
+        }
+        state->table[s] = realloc(state->table[s], sizeof(unsigned char) * 2 * new_size);
+    }
+    state->n = new_size;
     //printf("before computing W\n");
     QCircuit * W = StabTable_simplifying_unitary(state);
     //printf("after computing W\n");
@@ -3045,6 +2944,38 @@ static PyObject * calculate_algorithm(PyObject* self, PyObject* args){
     }
     state->n = new_size;
 
+    int qubits_deleted = 0;
+    for(int q = 0; q < state->n; q++){
+	int non_identity_paulis = 0;
+	for(int s = 0; (s < state->k) && (non_identity_paulis == 0); s++){
+	    if((state->table[s][q] == 1) || (state->table[s][q+state->n] == 1)){
+		non_identity_paulis += 1;
+	    }
+	}
+	if(non_identity_paulis == 0){
+	    //every stabiliser is identity on this qubit
+	    //so we can just delete this qubit
+	    qubits_deleted += 1;
+	}else{
+	    if(qubits_deleted > 0){
+		for(int s = 0; s < state->k; s++){
+		    state->table[s][q-qubits_deleted] = state->table[s][q];
+		    state->table[s][q+state->n-qubits_deleted] = state->table[s][q+state->n];
+		}
+	    }
+	}
+    }
+    //now move all the Z guys left to fill the gap we just made
+    if(qubits_deleted > 0){
+	for(int s = 0; s < state->k; s++){
+	    for(int q = 0; q < state->n; q++){
+		state->table[s][q+state->n-qubits_deleted] = state->table[s][q+state->n];
+	    }
+	    state->table[s] = (unsigned char *)realloc(state->table[s], 2*(state->n - qubits_deleted)*sizeof(unsigned char));
+	}
+	state->n = state->n - qubits_deleted;
+    }
+
     //printf("2:\n");
     //StabTable_print(state);
     //printf("\n");
@@ -3054,6 +2985,8 @@ static PyObject * calculate_algorithm(PyObject* self, PyObject* args){
 
     //we explicitly compute the sum appearing in 10
     //printf("t= %d, k = %d, r = %d\n", t, state->k, t-state->k);
+    //printf("state->k = %d\n", state->k);
+
     uint_bitarray_t full_mask = 0u;
     for(int i = 0; i < state->k; i++){
         full_mask |= (ONE << i);
@@ -3104,6 +3037,417 @@ static PyObject * calculate_algorithm(PyObject* self, PyObject* args){
 
     return Py_BuildValue("dd", creal(acc), cimag(acc));
 }
+
+static PyObject * StabTable_to_python_tuple(StabTable * table){
+
+    const long int dimensions1[1] = {table->k};
+    const long int dimensions2[2] = {table->k, table->n};
+
+    PyArrayObject * py_table = (PyArrayObject*)PyArray_SimpleNew(2, dimensions2,  PyArray_UBYTE);
+    PyArrayObject * py_phases = (PyArrayObject*)PyArray_SimpleNew(1, dimensions1,  PyArray_UBYTE);
+    for(int s = 0; s < table->k; s++){
+        for(int q = 0; q < table->n; q++){
+	    py_table->data[s*py_table->strides[0] + q*py_table->strides[1]] = (unsigned char)table->table[s][q];
+        }
+        py_phases->data[s*py_phases->strides[0]] = table->phases[s];
+    }
+    return Py_BuildValue("iiOO", table->n, table->k, (PyObject*)py_table, (PyObject*)py_phases);
+}
+
+static StabTable * python_tuple_to_StabTable(PyObject * tuple){
+    PyObject * py_n = PyTuple_GetItem(tuple, 0);
+    PyObject * py_k = PyTuple_GetItem(tuple, 1);
+    PyArrayObject * py_table = PyTuple_GetItem(tuple, 2);
+    PyArrayObject * py_phases = PyTuple_GetItem(tuple, 3);
+
+    int n = PyLong_AsLong(py_n);
+    int k = PyLong_AsLong(py_k);
+    
+    StabTable * table = StabTable_new(n,  k);
+    for(int s = 0; s < table->k; s++){
+	for(int q = 0; q < 2*table->n; q++){
+	    table->table[s][q] = *((unsigned char*)PyArray_GETPTR2(py_table, s, q));
+	}
+	table->phases[s]= *((unsigned char*)PyArray_GETPTR1(py_table, s));
+    }
+
+    return table;
+}
+
+
+static PyObject * compress_algorithm(PyObject* self, PyObject* args){
+    PyArrayObject * gates;
+    PyArrayObject * controls;
+    PyArrayObject * targets;
+    PyArrayObject * a; // project |a_i><a_i| on qubit i on the first w qubits (a is length w array)
+
+    int n;
+    int measured_qubits;
+
+    if (!PyArg_ParseTuple(args, "iiO!O!O!O!", &n, &measured_qubits,
+                          &PyArray_Type, &gates,
+                          &PyArray_Type, &controls,
+                          &PyArray_Type, &targets,
+                          &PyArray_Type, &a
+            )){
+        return NULL;
+    }
+
+    //gatetize all the t gates
+    int t = 0;
+    for(int i = 0; i < gates->dimensions[0]; i++){
+        if(((char)gates->data[i*gates->strides[0]]) == T){
+            gates->data[i*gates->strides[0]] = CX;
+            //controls->data[i*controls->strides[0]] = (unsigned int)targets->data[i*targets->strides[0]];
+            unsigned int * ptr = (unsigned int *)PyArray_GETPTR1(controls, i);
+            *ptr = *(unsigned int *)PyArray_GETPTR1(targets, i);
+            ptr = (unsigned int *)PyArray_GETPTR1(targets, i);
+            *ptr = (unsigned int)(n + t);
+            t += 1;
+        }
+    }
+
+    //now we do the stabiliser evolution
+    //to compute W
+
+    StabTable * state = StabTable_new(n+t, n+t);
+
+    for(int i = 0; i < gates->dimensions[0]; i++){
+        //printf("%d, %c, %d, %d\n", i, gates->data[i*gates->strides[0]],controls->data[i*controls->strides[0]], targets->data[i*targets->strides[0]]);
+        switch((char)gates->data[i*gates->strides[0]]) {
+        case CX:
+            StabTable_CX(state, (*(unsigned int *)PyArray_GETPTR1(controls,i)), (*(unsigned int *)PyArray_GETPTR1(targets,i)));
+            break;
+        case CZ:
+            StabTable_CZ(state, (*(unsigned int *)PyArray_GETPTR1(controls,i)), (*(unsigned int *)PyArray_GETPTR1(targets,i)));
+            break;
+        case S:
+            StabTable_S(state, (*(unsigned int *)PyArray_GETPTR1(targets,i)));
+            break;
+        case H:
+            StabTable_H(state, (*(unsigned int *)PyArray_GETPTR1(targets,i)));
+            break;
+        }
+    }
+
+    //in the sequel we will assume that the CB measurement outcome we are interested in at the end is |0...0>
+    //we "fix" this by applying a bunch of X gates to the measured qubits here
+    for(int i = 0; i < measured_qubits; i++){
+       if((unsigned char)a->data[i*a->strides[0]]){
+           StabTable_X(state, i);
+       }
+    }
+
+    int log_v = StabTable_apply_constraints(state, measured_qubits, t);
+    if(log_v < 0){
+	StabTable_free(state);
+        return PyComplex_FromDoubles(0., 0.);
+    }
+    //int idents = StabTable_apply_T_constraints(state,t);
+
+    //now delete the first (n) = table->n - t (since table->n = n + t at this point) qubits
+    //at this point we should just be left with t qubits
+    int q_to_delete = state->n - t;
+    int new_size = t;
+    for(int s = 0; s < state->k; s++){
+        for(int q = q_to_delete; q < state->n; q++){
+            state->table[s][q-q_to_delete] = state->table[s][q];
+        }
+        for(int q = q_to_delete; q < state->n; q++){
+            state->table[s][q-2*q_to_delete+state->n] = state->table[s][q+state->n];
+        }
+        state->table[s] = realloc(state->table[s], sizeof(unsigned char) * 2 * new_size);
+    }
+    state->n = new_size;
+
+    //now some of the stabilisers are all identity on some T qubits due to the imposition of the T constrainsts
+    int qubits_deleted = 0;
+    for(int q = 0; q < state->n; q++){
+	int non_identity_paulis = 0;
+	for(int s = 0; (s < state->k) && (non_identity_paulis == 0); s++){
+	    if((state->table[s][q] == 1) || (state->table[s][q+state->n] == 1)){
+		non_identity_paulis += 1;
+	    }
+	}
+	if(non_identity_paulis == 0){
+	    //every stabiliser is identity on this qubit
+	    //so we can just delete this qubit
+	    qubits_deleted += 1;
+	}else{
+	    if(qubits_deleted > 0){
+		for(int s = 0; s < state->k; s++){
+		    state->table[s][q-qubits_deleted] = state->table[s][q];
+		    state->table[s][q+state->n-qubits_deleted] = state->table[s][q+state->n];
+		}
+	    }
+	}
+    }
+    //now move all the Z guys left to fill the gap we just made
+    if(qubits_deleted > 0){
+	for(int s = 0; s < state->k; s++){
+	    for(int q = 0; q < state->n; q++){
+		state->table[s][q+state->n-qubits_deleted] = state->table[s][q+state->n];
+	    }
+	    state->table[s] = (unsigned char *)realloc(state->table[s], 2*(state->n - qubits_deleted)*sizeof(unsigned char));
+	}
+	state->n = state->n - qubits_deleted;
+    }
+
+    QCircuit * W = StabTable_simplifying_unitary(state);
+    //printf("after computing W\n");
+
+    state->circ = NULL;
+
+    //now we have to work out what we need to do magic sampling with this W circuit
+    //we need the CH-form for W|\tilde{0}>
+    //and the AG tableau for W|0> (no tilde!)
+
+    CHForm chState;
+    init_cb_CHForm(t,&chState);
+    //Hadamard everything because we want to know the evolution of |\tilde{0}> = |+>
+    for(int i = 0; i < t; i++){
+        HL(&chState, i);
+    }
+    //printf("before computing chState & agState\n");
+    StabTable * agState = StabTable_new(t,t);
+
+    for(int i = 0; i < W->length; i++){
+        switch(W->tape[i].tag) {
+        case CX:
+            CXL(&chState, W->tape[i].control, W->tape[i].target);
+            StabTable_CX(agState, W->tape[i].control, W->tape[i].target);
+            break;
+        case CZ:
+            CZL(&chState, W->tape[i].control, W->tape[i].target);
+            StabTable_CZ(agState, W->tape[i].control, W->tape[i].target);
+            break;
+        case S:
+            SL(&chState, W->tape[i].target);
+            StabTable_S(agState, W->tape[i].target);
+            break;
+        case H:
+            HL(&chState, W->tape[i].target);
+            StabTable_H(agState, W->tape[i].target);
+            break;
+        }
+    }
+    //printf("a\n");
+    QCircuit_free(W);
+    //printf("b\n");
+    t = state->n;
+    //printf("c\n");
+    int r = t - state->k;
+    //printf("d\n");
+    StabTable_free(state);
+    //printf("e\n");
+    //relevant info to return
+    //t - qubits_deleted == state->n == chState->n == agState->n
+    //r
+    //log_v
+    //chState and agState    
+    //printf("f\n");
+    PyObject * pyChState = CHForm_to_python_tuple(&chState);
+    //printf("g\n");
+    PyObject * pyAGState = StabTable_to_python_tuple(agState);
+    //printf("h\n");
+    dealocate_state(&chState);
+    //printf("i\n");
+    StabTable_free(agState);
+    //printf("j\n");
+    
+    return Py_BuildValue("iiiOO", t, r, log_v, pyChState, pyAGState);
+}
+
+
+static PyObject * estimate_algorithm(PyObject* self, PyObject* args){
+    int magic_samples, equatorial_samples, r, log_v, measured_qubits, seed;
+    PyObject * CHTuple;
+    PyObject * AGTuple;
+	
+    if (!PyArg_ParseTuple(args, "iiiiiiO!O!", &magic_samples, &equatorial_samples, &measured_qubits, &log_v, &r, &seed,
+			  &PyTuple_Type, &CHTuple,
+			  &PyTuple_Type, &AGTuple
+            )){
+        return NULL;
+    }
+    srand(seed);
+
+    CHForm * chState = python_tuple_to_CHForm(CHTuple);
+    StabTable * agState = python_tuple_to_StabTable(AGTuple);
+
+
+    //at this point we want to generate a list of length equatorial_samples
+    //containing r - qubit equatorial states
+    //ie. r x r binary symmetric matrices
+    equatorial_matrix_t * equatorial_matrices = calloc(equatorial_samples, sizeof(equatorial_matrix_t));
+    for(int i = 0; i < equatorial_samples; i++){
+        init_random_equatorial_matrix(&(equatorial_matrices[i]), r);
+    }
+    //printf("a\n");
+    uint_bitarray_t magic_mask = 0;
+
+    for(int i = 0; i < agState->n; i++){
+        magic_mask |= (ONE<<i);
+    }
+    //printf("b\n");
+    uint_bitarray_t * ys = calloc(magic_samples, sizeof(uint_bitarray_t));
+    for(int i = 0; i < magic_samples; i++){
+        ys[i] = bitarray_rand() & magic_mask;
+    }
+    //printf("c\n");
+    uint_bitarray_t equatorial_mask = 0;
+    for(int i = 0; i < r; i++){
+        equatorial_mask |= (ONE << i);
+    }
+    //printf("d\n");
+    //we project onto 0 and throw away the first t-r qubits
+    //leaving us with an r qubit state
+    uint_bitarray_t bitA = 0;
+    uint_bitarray_t bitMask = 0;
+    for(int i = 0; i < chState->n-r; i++){
+        bitMask |= (ONE << i);
+    }
+
+    //printf("e\n");
+    double complex * inner_prods = calloc(equatorial_samples, sizeof(double complex));
+    double complex alpha = (1. - I*(sqrt(2.) - 1.))/2.;
+    double beta = log2(4. - 2.*sqrt(2.));
+    double complex alpha_phase = alpha / cabs(alpha);
+    double complex alpha_c_phase = conj(alpha_phase);
+
+
+    for(int i = 0; i < magic_samples; i++){
+        //printf("%d\n", i);
+        //generate our state
+        CHForm copy = copy_CHForm(chState);
+
+        for(int bit = 0; bit < chState->n; bit++){
+            if((ys[i] >> bit) & ONE){
+                //apply W S^3_bit W^\dagger to chState
+                uint_bitarray_t * z_mat = calloc(chState->n, sizeof(uint_bitarray_t));
+                uint_bitarray_t * x_mat = calloc(chState->n, sizeof(uint_bitarray_t));
+
+                uint_bitarray_t mask = (uint_bitarray_t)0;
+                uint_bitarray_t t_mask = (uint_bitarray_t)0;
+
+                unsigned int g = 2*agState->phases[bit] ;
+                for(int j = 0; j < chState->n; j++){
+                    if(agState->table[bit][j]){
+                        x_mat[j] = copy.F[j];
+                        z_mat[j] = copy.M[j];
+                        mask |= (ONE << j);
+                    }
+                    if(agState->table[bit][j+agState->n]){
+                        z_mat[j] ^= copy.G[j];
+                    }
+                    t_mask |= (ONE << j);
+                    //if x and z are both 1 we get a factor of i because iXZ == Y
+                    if((agState->table[bit][j] == 1) && (agState->table[bit][j+agState->n] == 1)){
+                        g += 1;
+                    }
+
+                }
+                g += popcount(copy.g1 & mask) + 2*popcount(copy.g2 & mask);
+                g += 2*sort_pauli_string(chState->n, x_mat, z_mat, mask);
+
+                uint_bitarray_t u = 0u; // u_m is exponent of X_m
+                uint_bitarray_t h = 0u; // h_m is exponent of Z_m
+
+                for(int k = 0; k < chState->n; k++){
+                    if(agState->table[bit][k]){
+                        u ^= (copy.F[k] & t_mask);
+                        h ^= (copy.M[k] & t_mask);
+                    }
+                    if(agState->table[bit][k+agState->n]){
+                        h ^= (copy.G[k] & t_mask);
+                    }
+                }
+                //at this point the state we want is w U_c [I +  i^g \prod_m  Z_m^{h_m}X_m^{u_m}] U_H |s>
+                //we need to  commute the product through U_H
+                //and then desuperpositionise
+                //we pull the same trick again
+                // (\prod_m X_m^{u_m}Z_m^{h_m}  ) U_H = U_H (U_H^\dagger (\prod_m Z_m^{h_m}X_m^{u_m}) U_H)
+                //n.b. Hadamard is self-adjoint
+                //what happens - if V_k is zero then nothing happens
+                //if V_k is 1 then we swap X and Z
+                //if V_k is 1 and X and Z are both 1 we get a minus sign
+
+                uint_bitarray_t u2 = (u & (~copy.v)) ^ (h & (copy.v));
+                uint_bitarray_t h2 = (h & (~copy.v)) ^ (u & (copy.v));
+                g += 2*parity(u & h & copy.v & t_mask);
+
+
+                //at this point the state we want is w U_c [I +  i^g  U_H  \prod_m  Z_m^{h2_m} X_m^{u2_m}] |s>
+                //we apply the paulis to |s>
+                //every x flips a bit of s
+                //every time a z hits a |1> we get a -1
+                //xs happen first
+
+                uint_bitarray_t y = (copy.s ^ u2) & t_mask;
+                g += 2*parity(y & h2 & t_mask);
+                g += 1; //an i appears in the expression for S^3 in terms of Z and I
+                g %= 4;
+
+                //at this point the state we want is w e^{-i\pi/4}/sqrt{2} U_c U_h( |s> + i^(g) |y>) //extra factors from the formula for S^3
+                if((y & t_mask) == (copy.s & t_mask)){
+                    double complex a = 1.;
+
+                    if(g == 0){
+                        a += 1.;
+                    }
+                    if(g == 1){
+                        a += (1.)*I;
+                    }
+                    if(g == 2){
+                        a += (-1.);
+                    }
+                    if(g == 3){
+                        a += (-1.*I);
+                    }
+
+                    copy.w *= (a*(1 - 1.*I)/2.);
+                }else{
+                    desupersitionise(&copy, y,  g);
+                    copy.w *= (1.-1.*I)/2.;
+                }
+
+                free(x_mat);
+                free(z_mat);
+            }
+        }
+
+        //at this point copy contains our magic sample
+        //we want to project it and do fastnorm estimation
+
+        //now we project onto the measurement outcomes for the w qubits
+        postselect_and_reduce(&copy, bitA, bitMask);
+        int hamming_weight = popcount(ys[i]);
+        double complex prefactor = powl(2., ((beta + 1)*chState->n + log_v - measured_qubits)/2.)*cpowl(alpha_phase, chState->n-hamming_weight)*cpowl(alpha_c_phase, hamming_weight);
+        for(int j = 0; j < equatorial_samples; j++){
+            //CHForm copy2 = copy_CHForm(&copy);
+            double complex d = conj(equatorial_inner_product(&copy, equatorial_matrices[j]))/(double)(magic_samples);
+            
+            inner_prods[j] += prefactor*d;
+        }
+    }
+    free(ys);
+
+    double acc = 0;
+    for(int j = 0; j < equatorial_samples; j++){
+        acc += creal(inner_prods[j]*conj(inner_prods[j]))/(double)equatorial_samples;
+    }
+    free(inner_prods);
+
+    for(int j = 0; j < equatorial_samples; j++){
+        dealocate_equatorial_matrix(&equatorial_matrices[j]);
+    }
+    
+    free(equatorial_matrices);
+    StabTable_free(agState);
+    dealocate_state(chState);
+
+    return PyComplex_FromDoubles(creal(acc), cimag(acc));       					   
+}
 static PyMethodDef myMethods[] = {
     { "apply_gates_to_basis_state", apply_gates_to_basis_state, METH_VARARGS, "Applies a bunch of gates to an initial computational-basis state"},
     { "apply_gates_to_basis_state_project_and_reduce", apply_gates_to_basis_state_project_and_reduce, METH_VARARGS, "Applies a bunch of gates to an initial computational-basis state, then applies a bunch of z projectors and removes the (now product state) qubits we projected"},
@@ -3119,6 +3463,8 @@ static PyMethodDef myMethods[] = {
     { "v_r_info", v_r_info, METH_VARARGS, "stuff"},
     { "lhs_rank_info", lhs_rank_info, METH_VARARGS, "stuff"},
     { "calculate_algorithm", calculate_algorithm, METH_VARARGS, "stuff"},
+    { "compress_algorithm", compress_algorithm, METH_VARARGS, "Run the compress algorithm precomputation"},
+    { "estimate_algorithm", estimate_algorithm, METH_VARARGS, "Run the estimate algorithm"},
     { NULL, NULL, 0, NULL }
 };
 
