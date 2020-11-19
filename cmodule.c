@@ -2873,7 +2873,8 @@ static PyObject * calculate_algorithm(PyObject* self, PyObject* args){
             )){
         return NULL;
     }
-
+    //clock_t start = clock();
+    
     //gatetize all the t gates
     int t = 0;
     for(int i = 0; i < gates->dimensions[0]; i++){
@@ -2976,6 +2977,8 @@ static PyObject * calculate_algorithm(PyObject* self, PyObject* args){
 	state->n = state->n - qubits_deleted;
     }
 
+    //printf("before compute n=%d, k=%d, qubits_deleted=%d\n", state->n, state->k,qubits_deleted);
+    //printf("\n");StabTable_print(state);printf("\n");
     //printf("2:\n");
     //StabTable_print(state);
     //printf("\n");
@@ -2992,6 +2995,9 @@ static PyObject * calculate_algorithm(PyObject* self, PyObject* args){
         full_mask |= (ONE << i);
     }
     double complex acc = 0.;
+    //clock_t end = clock();
+    //double FE_time = ((double)(end - start)) / (double)CLOCKS_PER_SEC;
+    //start = clock();
     for(uint_bitarray_t mask = 0u; mask < full_mask; mask++){
         unsigned char * row = calloc(2*state->n, sizeof(unsigned char));
         unsigned char phase = 0;
@@ -3009,21 +3015,23 @@ static PyObject * calculate_algorithm(PyObject* self, PyObject* args){
         int ZCount = 0;
 
         for(int j = 0; j < state->n; j++){
-            if(row[j] == 0 && row[j+state->n] == 0){
+            if((row[j] == 0) && (row[j+state->n] == 0)){
                 ICount += 1;
             }
-            if(row[j] == 1 && row[j+state->n] == 0){
+	    if((row[j] == 1) && (row[j+state->n] == 0)){
                 XCount += 1;
             }
-            if(row[j] == 0 && row[j+state->n] == 1){
+	    if((row[j] == 0) && (row[j+state->n] == 1)){
                 ZCount += 1;
             }
-            if(row[j] == 1 && row[j+state->n] == 1){
+	    if((row[j] == 1) && (row[j+state->n] == 1)){
                 YCount += 1;
             }
         }
 
-        double complex val = cpowl(1./sqrt(2), XCount + YCount);
+        double complex val = cpowl(1./sqrtl(2.), XCount + YCount);
+	//printf("val=%lf\n", creal(val));
+	//printf("I = %d, X = %d, Y = %d, Z = %d\n", ICount, XCount, YCount, ZCount);
         if(ZCount == 0){
             if(((phase + YCount) % 2) == 0){
                 acc += val;
@@ -3033,20 +3041,29 @@ static PyObject * calculate_algorithm(PyObject* self, PyObject* args){
         }
         free(row);
     }
+    if(full_mask == 0u){
+	acc = 1;
+    }
+    //printf("%lf\n",creal(acc));
     acc *= powl(2., log_v - measured_qubits);
-
+    //printf("%lf\n",creal(acc));
+    //end = clock();
+    //double calc_time = ((double)(end - start)) / (double)CLOCKS_PER_SEC;
+    StabTable_free(state);
+    
+    
     return Py_BuildValue("dd", creal(acc), cimag(acc));
 }
 
 static PyObject * StabTable_to_python_tuple(StabTable * table){
 
     const long int dimensions1[1] = {table->k};
-    const long int dimensions2[2] = {table->k, table->n};
+    const long int dimensions2[2] = {table->k, 2*table->n};
 
     PyArrayObject * py_table = (PyArrayObject*)PyArray_SimpleNew(2, dimensions2,  PyArray_UBYTE);
     PyArrayObject * py_phases = (PyArrayObject*)PyArray_SimpleNew(1, dimensions1,  PyArray_UBYTE);
     for(int s = 0; s < table->k; s++){
-        for(int q = 0; q < table->n; q++){
+        for(int q = 0; q < 2*table->n; q++){
 	    py_table->data[s*py_table->strides[0] + q*py_table->strides[1]] = (unsigned char)table->table[s][q];
         }
         py_phases->data[s*py_phases->strides[0]] = table->phases[s];
@@ -3057,8 +3074,8 @@ static PyObject * StabTable_to_python_tuple(StabTable * table){
 static StabTable * python_tuple_to_StabTable(PyObject * tuple){
     PyObject * py_n = PyTuple_GetItem(tuple, 0);
     PyObject * py_k = PyTuple_GetItem(tuple, 1);
-    PyArrayObject * py_table = PyTuple_GetItem(tuple, 2);
-    PyArrayObject * py_phases = PyTuple_GetItem(tuple, 3);
+    PyObject * py_table = PyTuple_GetItem(tuple, 2);
+    PyObject * py_phases = PyTuple_GetItem(tuple, 3);
 
     int n = PyLong_AsLong(py_n);
     int k = PyLong_AsLong(py_k);
@@ -3068,7 +3085,7 @@ static StabTable * python_tuple_to_StabTable(PyObject * tuple){
 	for(int q = 0; q < 2*table->n; q++){
 	    table->table[s][q] = *((unsigned char*)PyArray_GETPTR2(py_table, s, q));
 	}
-	table->phases[s]= *((unsigned char*)PyArray_GETPTR1(py_table, s));
+	table->phases[s]= *((unsigned char*)PyArray_GETPTR1(py_phases, s));
     }
 
     return table;
@@ -3429,6 +3446,7 @@ static PyObject * estimate_algorithm(PyObject* self, PyObject* args){
             
             inner_prods[j] += prefactor*d;
         }
+	dealocate_state(&copy);
     }
     free(ys);
 
@@ -3445,7 +3463,7 @@ static PyObject * estimate_algorithm(PyObject* self, PyObject* args){
     free(equatorial_matrices);
     StabTable_free(agState);
     dealocate_state(chState);
-
+    free(chState);
     return PyComplex_FromDoubles(creal(acc), cimag(acc));       					   
 }
 static PyMethodDef myMethods[] = {

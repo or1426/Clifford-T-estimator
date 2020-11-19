@@ -39,7 +39,7 @@ class QiskitSimulator(object):
             else:
                 raise TypeError("Only unitary Clifford gates and Z projectors supported! Recieved: {}".format(gate))
 
-        job = qiskit.execute(circuit, backend=self.backend,backend_options={"method": "statevector", "max_parallel_threads":1})
+        job = qiskit.execute(circuit, backend=self.backend,backend_options={"method": "statevector", "max_parallel_threads":10})
         
         #statevector = _rearange_state_vector(num_qubits, )
         statevector = job.result().get_statevector(circuit)
