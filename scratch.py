@@ -11,7 +11,7 @@ import util
 import random
 import pickle
 import math
-import qk
+#import qk
 #from qiskit.providers.aer import StatevectorSimulator, QasmSimulator
 import sys
 #import qiskit
@@ -739,8 +739,8 @@ if __name__ == "__lhs_rank_test___":
             
 if __name__ == "__main__":
     # do some simulations make some graphs
-    qubits = 50
-    measured_qubits = 5
+    qubits = 40
+    measured_qubits = 3
     print("n = ", qubits)
     print("w = ", measured_qubits)
     circs = 1
@@ -760,7 +760,7 @@ if __name__ == "__main__":
     s2_time = 0
 
     #epss = [0.1, 0.01,0.001]
-    epss = [.02]
+    epss = [.01]
     
     delta = 0.01
     gamma = math.log2(4-2*math.sqrt(2))
@@ -794,9 +794,9 @@ if __name__ == "__main__":
                 gateArray[j] = 116 # t
                 targetArray[j] = gate.target
 
-        for i, (a,m) in enumerate(zip(aArray, mask)):
-           if m:
-               circ | PauliZProjector(target=i, a=a)
+        #for i, (a,m) in enumerate(zip(aArray, mask)):
+        #   if m:
+        #       circ | PauliZProjector(target=i, a=a)
         #d_time = time.monotonic_ns()
         #sim = qk.QiskitSimulator()
         #qk_vector = sim.run(qubits, np.zeros(qubits), circ)
@@ -854,7 +854,8 @@ if __name__ == "__main__":
             #print("qk:",qk_val)
 
             t, r, log_v, CH, AG = cPSCS.compress_algorithm(qubits, measured_qubits, np.copy(gateArray), np.copy(controlArray), np.copy(targetArray), np.copy(aArray))
-            
+            print(t,r,log_v)
+            print(AG)
             
             #p = cPSCS.estimate_algorithm(1000, 100, measured_qubits, log_v, r, seed, CH, AG)
             #print(p)

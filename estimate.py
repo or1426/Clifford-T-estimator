@@ -46,7 +46,7 @@ def epsPrime(p, deltaTarg, eta, s, L, m,precision=0.01):
     
     return epsMid
 
-def epsStar(p, deltaTot, tau, m, eta_prec=1e-3, s_samples=100):
+def epsStar(p, deltaTot, tau, m, eta_prec=1e-3, s_samples=1000):
     #first lets come up with some bounds for eta
     #need Lmin < tau
 
@@ -78,7 +78,7 @@ def epsStar(p, deltaTot, tau, m, eta_prec=1e-3, s_samples=100):
                 L = 1
             #print(s,L, s*L, tau)
             #s = np.floor(tau/(L + ))
-            if L >= 1:
+            if L+LMin(deltaTot, eta) >= 20:
                 s = int(round(s))
                 eps = epsPrime(p, deltaTot, eta, s, L + LMin(deltaTot, eta), m, precision=1e-4)
                 #if eps== None:

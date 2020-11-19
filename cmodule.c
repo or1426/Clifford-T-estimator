@@ -2977,7 +2977,7 @@ static PyObject * calculate_algorithm(PyObject* self, PyObject* args){
 	state->n = state->n - qubits_deleted;
     }
 
-    //printf("before compute n=%d, k=%d, qubits_deleted=%d\n", state->n, state->k,qubits_deleted);
+    printf("before compute n=%d, k=%d, qubits_deleted=%d\n", state->n, state->k,qubits_deleted);
     //printf("\n");StabTable_print(state);printf("\n");
     //printf("2:\n");
     //StabTable_print(state);
