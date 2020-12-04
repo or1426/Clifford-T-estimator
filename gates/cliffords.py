@@ -267,6 +267,29 @@ class CompositeCliffordGate(CliffordGate):
                 inv.gates.append(gates.TGate(target=gate.target))
         return inv
 
+    def inverse(self):
+        inv = CompositeCliffordGate()
+
+        for gate in reversed(self.gates):
+            if isinstance(gate, CXGate):
+                inv.gates.append(CXGate(target=gate.target, control=gate.control))
+            if isinstance(gate, CZGate):
+                inv.gates.append(CZGate(target=gate.target, control=gate.control))
+            if isinstance(gate, HGate):
+                inv.gates.append(HGate(target=gate.target))
+            if isinstance(gate, SGate):
+                inv.gates.append(SGate(target=gate.target))
+                inv.gates.append(SGate(target=gate.target))
+                inv.gates.append(SGate(target=gate.target))
+            if isinstance(gate, gates.TGate):
+                inv.gates.append(SGate(target=gate.target))
+                inv.gates.append(SGate(target=gate.target))
+                inv.gates.append(SGate(target=gate.target))
+                inv.gates.append(gates.TGate(target=gate.target))
+        return inv
+            
+            
+            
 
 class SwapGate(CTypeCliffordGate):
     """
