@@ -2878,9 +2878,26 @@ static PyObject * calculate_algorithm(PyObject* self, PyObject* args){
     //gatetize all the t gates
     int t = 0;
     for(int i = 0; i < gates->dimensions[0]; i++){
+	/* switch((*(unsigned char *)PyArray_GETPTR1(gates,i))) { */
+        /* case CX: */
+        /*     printf("CX(%d, %d), ", (*(unsigned int *)PyArray_GETPTR1(targets,i)),(*(unsigned int *)PyArray_GETPTR1(controls,i))); */
+        /*     break; */
+        /* case CZ: */
+	/*     printf("CZ(%d, %d), ", (*(unsigned int *)PyArray_GETPTR1(targets,i)),(*(unsigned int *)PyArray_GETPTR1(controls,i))); */
+        /*     break; */
+        /* case S: */
+	/*     printf("S(%d), ", (*(unsigned int *)PyArray_GETPTR1(targets,i))); */
+        /*     break; */
+        /* case H: */
+	/*     printf("H(%d), ", (*(unsigned int *)PyArray_GETPTR1(targets,i))); */
+        /*     break; */
+	/* case T: */
+	/*     printf("T(%d), ", (*(unsigned int *)PyArray_GETPTR1(targets,i))); */
+        /*     break; */
+        /* } */
+
         if(((char)gates->data[i*gates->strides[0]]) == T){
             gates->data[i*gates->strides[0]] = CX;
-            //controls->data[i*controls->strides[0]] = (unsigned int)targets->data[i*targets->strides[0]];
             unsigned int * ptr = (unsigned int *)PyArray_GETPTR1(controls, i);
             *ptr = *(unsigned int *)PyArray_GETPTR1(targets, i);
             ptr = (unsigned int *)PyArray_GETPTR1(targets, i);
@@ -2888,10 +2905,11 @@ static PyObject * calculate_algorithm(PyObject* self, PyObject* args){
             t += 1;
         }
     }
-
+    //printf("\n");
     //now we do the stabiliser evolution
     //to compute W
-
+    //printf("t = %d\n", t);
+    //printf("w = %d\n", measured_qubits);
     StabTable * state = StabTable_new(n+t, n+t);
     /* printf("0:\n"); */
     /* StabTable_print(state); */
@@ -2899,7 +2917,7 @@ static PyObject * calculate_algorithm(PyObject* self, PyObject* args){
 
     for(int i = 0; i < gates->dimensions[0]; i++){
         //printf("%d, %c, %d, %d\n", i, gates->data[i*gates->strides[0]],controls->data[i*controls->strides[0]], targets->data[i*targets->strides[0]]);
-        switch((char)gates->data[i*gates->strides[0]]) {
+        switch((*(unsigned char *)PyArray_GETPTR1(gates,i))) {
         case CX:
             StabTable_CX(state, (*(unsigned int *)PyArray_GETPTR1(controls,i)), (*(unsigned int *)PyArray_GETPTR1(targets,i)));
             break;
@@ -2917,21 +2935,26 @@ static PyObject * calculate_algorithm(PyObject* self, PyObject* args){
 
     //in the sequel we will assume that the CB measurement outcome we are interested in at the end is |0...0>
     //we "fix" this by applying a bunch of X gates to the measured qubits here
-    //for(int i = 0; i < measured_qubits; i++){
-    //   if((unsigned char)a->data[i*a->strides[0]]){
-    //       StabTable_X(state, i);
-    //   }
-    //}
-
-
-    int log_v = StabTable_apply_constraints(state, measured_qubits, t);
-    if(log_v < 0){
-        return PyComplex_FromDoubles(0., 0.);
+    for(int i = 0; i < measured_qubits; i++){
+       if((*(unsigned char *)PyArray_GETPTR1(a,i)) == 1){
+	   //printf("flipping %d\n",i);
+           StabTable_X(state, i);
+       }
     }
-    int idents = StabTable_apply_T_constraints(state,t);
+
+    //printf("Entering constraints code\n");
+    //StabTable_print(state);printf("\n");
+    int log_v = StabTable_apply_constraints(state, measured_qubits, t);
+    //printf("constraints code returned log_v = %d\n",log_v);
+    //StabTable_print(state);printf("\n");
+    
+    if(log_v < 0){
+	return Py_BuildValue("d", 0); //PyComplex_FromDoubles(0., 0.);
+    }
+    
 
     //now delete the first (n) = table->n - t (since table->n = n + t at this point) qubits
-    //at this point we should just be left with t qubits
+    // at this point we should just be left with t qubits
     int q_to_delete = state->n - t;
     int new_size = t;
     for(int s = 0; s < state->k; s++){
@@ -2944,7 +2967,7 @@ static PyObject * calculate_algorithm(PyObject* self, PyObject* args){
         state->table[s] = realloc(state->table[s], sizeof(unsigned char) * 2 * new_size);
     }
     state->n = new_size;
-
+    int idents = StabTable_apply_T_constraints(state,t);
     int qubits_deleted = 0;
     for(int q = 0; q < state->n; q++){
 	int non_identity_paulis = 0;
@@ -2977,36 +3000,28 @@ static PyObject * calculate_algorithm(PyObject* self, PyObject* args){
 	state->n = state->n - qubits_deleted;
     }
 
-    printf("before compute n=%d, k=%d, qubits_deleted=%d\n", state->n, state->k,qubits_deleted);
-    //printf("\n");StabTable_print(state);printf("\n");
-    //printf("2:\n");
+    //printf("final state:\n");
     //StabTable_print(state);
-    //printf("\n");
-    //printf("log_v = %d\n", log_v);
-    //printf("log_v = %d\nstate->n = %d\nstate->k = %d\n", log_v, state->n, state->k);
-
-
     //we explicitly compute the sum appearing in 10
-    //printf("t= %d, k = %d, r = %d\n", t, state->k, t-state->k);
-    //printf("state->k = %d\n", state->k);
-
     uint_bitarray_t full_mask = 0u;
     for(int i = 0; i < state->k; i++){
         full_mask |= (ONE << i);
     }
     double complex acc = 0.;
-    //clock_t end = clock();
-    //double FE_time = ((double)(end - start)) / (double)CLOCKS_PER_SEC;
-    //start = clock();
-    for(uint_bitarray_t mask = 0u; mask < full_mask; mask++){
+    //printf("final k = %d\n", state->k);
+    //printBits(full_mask,5);printf("\n");
+    for(uint_bitarray_t mask = 0u; mask <= full_mask; mask++){
+	//printf("mask = ");printBits(mask,5);printf("\n");
         unsigned char * row = calloc(2*state->n, sizeof(unsigned char));
         unsigned char phase = 0;
         //we do the element of the sum corresponding to the bits of mask being 1
         for(int j = 0; j < state->k; j++){
             if((mask >> j) & ONE){
+		//printf("%d, ", j);
                 phase = StabTable_rowsum2(state, row, phase, j);
             }
         }
+	//printf("\n");
         //so now (row, phase) indicate a particular length t string of pauli matrices
         //and we want to compute <T|^t (row,phase |T>^t
         int ICount = 0;
@@ -3028,11 +3043,11 @@ static PyObject * calculate_algorithm(PyObject* self, PyObject* args){
                 YCount += 1;
             }
         }
-
-        double complex val = cpowl(1./sqrtl(2.), XCount + YCount);
+	
+        double val = powl(1./2., (XCount + YCount)/2.);
 	//printf("val=%lf\n", creal(val));
-	//printf("I = %d, X = %d, Y = %d, Z = %d\n", ICount, XCount, YCount, ZCount);
-        if(ZCount == 0){
+	//printf("I = %d, X = %d, Y = %d, Z = %d, total = %d\n", ICount, XCount, YCount, ZCount, ICount+ XCount+ YCount+ ZCount);
+        if(ZCount == 0){	    
             if(((phase + YCount) % 2) == 0){
                 acc += val;
             }else{
@@ -3052,7 +3067,7 @@ static PyObject * calculate_algorithm(PyObject* self, PyObject* args){
     StabTable_free(state);
     
     
-    return Py_BuildValue("dd", creal(acc), cimag(acc));
+    return Py_BuildValue("d", acc);
 }
 
 static PyObject * StabTable_to_python_tuple(StabTable * table){

@@ -16,27 +16,33 @@ def LMin(delta, eta):
           
     return np.ceil(-np.power(eta/(1-eta), 2)*np.log(delta))
 
-def epsPrime(p, deltaTarg, eta, s, L, m,precision=0.01):
+def epsPrime(p, deltaTarg, eta, s, L, m,precision=0.001):
     #want to return eps such that
     #deltaPrime(p, eps, eta, s, LMin(deltaTarg, eta)+ L, m) = deltaTarg
+    #print("deltaTarg", deltaTarg)
+    a = (np.power(np.sqrt((2/s)*(2+np.log(2/deltaTarg)))*(1+m) + np.sqrt(p),2) - p)/eta
+    b = p*np.sqrt(np.log(1/deltaTarg)/L)/(1-eta - eta*np.sqrt(np.log(1/deltaTarg)/L))
+    #print("a", a, deltaPrime(p, a, eta, s, L+LMin(deltaTarg, eta), m))
+    #print("b", b, deltaPrime(p, b, eta, s, L+LMin(deltaTarg, eta), m))
+    #deltaPrime = 2*e^2 *exp(-s*(sqrt(p + eta*a) - sqrt(p))^2/(2*(m + 1)^2))
+    #deltaPrime = exp(-L*((1-eta)*b / (p+eta*b)))
+    #deltaPrime(p, a, eta, s, L, m) and deltaPrime(p, b, eta, s, L, m)  > deltaTarg
+    #so 0, a, b < epsPrime
 
-    #we know eps = 0 will make a delta that is too big
-    #we expect that eps = 1 will make a delta that is too small but can't guarantee this (I think)
-    #keep doubling epsUpper until we find an upper bound
-    epsLower = 0
-    epsUpper = 1
+    #can we come up with some decent upper bound? - yes!
+    #c and d are not individually upper bounds but their max is
+    c = (np.power(np.sqrt((2/s)*(2+np.log(1/deltaTarg)))*(1+m) + np.sqrt(p),2) - p)/eta
+    d = p*np.sqrt(np.log(0.5/deltaTarg)/L)/(1-eta - eta*np.sqrt(np.log(0.5/deltaTarg)/L))
 
-    while deltaPrime(p, epsUpper, eta, s, L+LMin(deltaTarg, eta), m) > deltaTarg:
-        epsLower = epsUpper
-        epsUpper *= 2
-        if epsUpper > 2**20:            
-            #print("WARNING: epsPrime function could not find a sensible upper bound")
-            return None
+    epsLower = max(a,b)    
+    epsUpper = max(c,d)
+    #print(deltaTarg, epsLower, deltaPrime(p, epsLower, eta, s, L+LMin(deltaTarg, eta), m), epsUpper, deltaPrime(p, epsUpper, eta, s, L+LMin(deltaTarg, eta), m))
     
     #so now the correct eps is between epsLower and epsUpper
     #just do midpoint division until we hit the required precision
     epsMid = (epsUpper + epsLower)/2
     while (epsUpper - epsLower)/epsMid > precision:
+        print(epsLower, epsUpper)
         epsMid = (epsUpper + epsLower)/2
         d = deltaPrime(p, epsMid, eta, s, L+LMin(deltaTarg, eta), m)
         if d > deltaTarg:
@@ -46,7 +52,7 @@ def epsPrime(p, deltaTarg, eta, s, L, m,precision=0.01):
     
     return epsMid
 
-def epsStar(p, deltaTot, tau, m, eta_prec=1e-3, s_samples=1000):
+def epsStar(p, deltaTot, tau, m, eta_prec=1e-3, s_samples=500):
     #first lets come up with some bounds for eta
     #need Lmin < tau
 
@@ -66,13 +72,14 @@ def epsStar(p, deltaTot, tau, m, eta_prec=1e-3, s_samples=1000):
     epsMin = float("inf")
     sBest, LBest, etaBest = None, None, None
     for eta in etas:        
-        ss = np.ceil(np.linspace(1, tau/(1 + LMin(deltaTot, eta)),  s_samples)) 
+        ss = np.ceil(np.linspace(1, tau/(20*(1 + LMin(deltaTot, eta))),  s_samples)) 
         epsMinForThisEta = float("inf")
         sBestForThisEta, LBestForThisEta = None, None
         epsPrev = float("inf")
         sPrev = None
         LPrev = None
         for s in ss:
+            #print("s=",s, "lmin=", LMin(deltaTot, eta), "tau=",tau)
             L = int(np.floor(tau/s - LMin(deltaTot, eta)))
             if L < 1:
                 L = 1
@@ -112,7 +119,8 @@ def optimize(epsTot, deltaTot, tPrime, measured_qubits, r, log_v, m, CH, AG, see
     k = 0
     s = -2*np.power(np.sqrt(m) + 1, 2)*np.log(deltaTot/(2*np.exp(2)))/epsTot
     L = 1
-    tauZero = s*L
+    tauZero = s*L   
+
     #print(tauZero)
     while not exitCondition:
         k += 1
@@ -128,7 +136,8 @@ def optimize(epsTot, deltaTot, tPrime, measured_qubits, r, log_v, m, CH, AG, see
         
         if eStar < epsTot:
             exitCondition = True
-        dtime = time.monotonic()
+
+        
         totalL = int(round(LPlus + LMin(6*deltaTot/np.power(np.pi*k,2), eta)))
         #print(eta, s, totalL, LPlus, LMin(6*deltaTot/np.power(np.pi*k,2), eta), measured_qubits, log_v, r)
         pHat = None
@@ -152,29 +161,66 @@ def optimize(epsTot, deltaTot, tPrime, measured_qubits, r, log_v, m, CH, AG, see
         print(k, pStar, pHat, eStar, epsTot, s, totalL, LPlus, eta, 6*deltaTot/np.power(np.pi*k,2), optimize_time, estimate_time)
     return pStar
     
+def hackedOptimise(p, m, epsTot, deltaTot):
+    exitCondition = False
+    #k = 0
+    s = -2*np.power(np.sqrt(m) + 1, 2)*np.log(deltaTot/(2*np.exp(2)))/epsTot
+    L = 1
+    tauZero = s*L
+    k = 0
+    K = 0
+    pStar = 1
+    #print(tauZero)
+    while not exitCondition:
+        k += 1
+        eStar, eta, s, LPlus = epsStar(pStar, 6*deltaTot/np.power(np.pi*k,2), np.power(2,k)*tauZero, m)
+        print(p, eStar, eta,s,LPlus, LMin(6*deltaTot/np.power(np.pi*k,2), eta))
+        K += s*(LPlus + LMin(6*deltaTot/np.power(np.pi*k,2), eta))
+        if eStar < epsTot:
+            exitCondition = True
+        totalL = int(round(LPlus + LMin(6*deltaTot/np.power(np.pi*k,2), eta)))
+        #print(eta, s, totalL, LPlus, LMin(6*deltaTot/np.power(np.pi*k,2), eta), measured_qubits, log_v, r)
+
+        pHat = p
+        
+        pStar = max(0, min(1, pStar, pHat + eStar))
+
+        #print(k, pStar, pHat, eStar, epsTot, s, totalL, LPlus, eta, 6*deltaTot/np.power(np.pi*k,2))
+    print(p, K)
+    return p, K
     
     
 
     
 if __name__ == "__main__":
-    p = np.power(2.,-3)
-    
-    deltaTarg = 1.149200570612527e-07
-    
-    #23 0.1475560492266207 0.1250202067816151 0.022638320922851562 0.02 39981459 998 997 0.156 1.149200570612527e-07 1.8804871661122888 124.6749424149748
-
-    eta = 0.156
-    
-    s = 39981459
-    L = 998
-    
     beta = np.log2(4. - 2.*np.sqrt(2.));
-    t = 10
+    t = 40
     m = np.power(2, beta*t/2)
 
-    pHat = 0.1475560492266207
+    p = 0.0125
+    eta = 0.5
+    s = 100000000
+    L = 1000
+    #ps = np.linspace(0.05,0.3,5)
+    #Ks = np.zeros_like(ps)
+    eps = 0.001
+    d = deltaPrime(p, eps, eta, s, L, m)
+    eps2 = epsPrime(p, d, eta, s, L, m,precision=0.001)
+
+    print(eps)
+    print(eps2)
+    print(d)
+    #epss = np.linspace(0.001,0.5,100)
+    #epss2 = []
+    #for eps in epss:
+    #   epss2.append(epsPrime(p, deltaPrime(p, eps, eta, s, L, m), eta, s, L, m,precision=0.001))
+
+    #plt.plot(epss, epss)
+    #plt.scatter(epss, epss2, color="r")
     
-    epsP = epsPrime(pHat, deltaTarg, eta, s, L, m,precision=0.01)
-    deltaP = deltaPrime(pHat, epsP, eta, s, L, m)
-    print(epsP)
-    print(deltaP)
+    #plt.grid()
+    #plt.show()
+    #with Pool(10) as p:
+    #    ans = p.starmap(hackedOptimise,[(p,m,0.02,0.001) for p in ps])
+    #    print(ans)
+
