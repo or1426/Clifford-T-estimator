@@ -11,7 +11,7 @@ import util
 import random
 import pickle
 import math
-#import qk
+import qk
 #from qiskit.providers.aer import StatevectorSimulator, QasmSimulator
 import sys
 #import qiskit
@@ -208,7 +208,7 @@ if __name__ == "__calculate-test__":
             
             
 
-if __name__ == "__r_hist__":
+if __name__ == "__rv_hist__":
     qubits = 100
     t = int(sys.argv[1])
     depth = 100000
@@ -279,11 +279,11 @@ if __name__ == "__r_hist__":
     #plt.show()
         
     
-if __name__ == "__v_r__":
-    qubits = 100
-    t = 100
-    depth = 1000
-    circs = 100
+if __name__ == "__identity_test__":
+    qubits = 10
+    t = 10
+    depth = 20
+    circs = 1
     measured_qubits = qubits
 
     aArray = np.array([0 for _ in range(measured_qubits)], dtype=np.uint8)
@@ -293,9 +293,75 @@ if __name__ == "__v_r__":
     
 
     for  i, circ in enumerate(util.random_clifford_circuits_with_bounded_T(qubits, depth, circs, t)):
-        gateArray = np.zeros(depth, dtype=np.uint8)
-        controlArray = np.zeros(depth, dtype=np.uint)
-        targetArray = np.zeros(depth, dtype=np.uint)
+        uDagger  = circ.inverse()
+        weirdIdentity = CompositeCliffordGate()
+        weirdIdentity.gates = circ.gates + uDagger.gates
+        #weirdIdentity.gates = [HGate(1), TGate(1), CXGate(1, 0), TGate(1), CXGate(1, 0)]
+        #weirdIdentity.gates = [TGate(4), TGate(9), HGate(5), TGate(7), TGate(2), TGate(0), HGate(5), CXGate(5, 0), HGate(4), CXGate(8, 5), TGate(4), CXGate(6, 0), TGate(9), TGate(6), CZGate(4, 3), TGate(2), SGate(5), HGate(5), TGate(3), CXGate(3, 9), CXGate(3, 9), SGate(3), TGate(3), HGate(5), SGate(5), SGate(5), SGate(5), SGate(2), TGate(2), CZGate(4, 3), SGate(6), TGate(6), SGate(9), TGate(9), CXGate(6, 0), SGate(4), TGate(4), CXGate(8, 5), HGate(4), CXGate(5, 0), HGate(5), SGate(0), TGate(0), SGate(2), TGate(2), SGate(7), TGate(7), HGate(5), SGate(9), TGate(9), SGate(4), TGate(4)]
+        print(", ".join([gate.__str__() for gate in weirdIdentity.gates]))
+        
+        gateArray = np.zeros(len(weirdIdentity.gates), dtype=np.uint8)
+        controlArray = np.zeros(len(weirdIdentity.gates), dtype=np.uint)
+        targetArray = np.zeros(len(weirdIdentity.gates), dtype=np.uint)
+        
+        for j, gate in enumerate(weirdIdentity.gates):
+            if isinstance(gate, CXGate):
+                gateArray[j] = 88 #X
+                controlArray[j] = gate.control
+                targetArray[j] = gate.target
+            elif isinstance(gate, CZGate):
+                gateArray[j] = 90 #Z
+                controlArray[j] = gate.control
+                targetArray[j] = gate.target
+            elif isinstance(gate, SGate):
+                gateArray[j] = 115 #s
+                targetArray[j] = gate.target
+            elif isinstance(gate, HGate):
+                gateArray[j] = 104 #h
+                targetArray[j] = gate.target
+            elif isinstance(gate, TGate):
+                gateArray[j] = 116 # t
+                targetArray[j] = gate.target
+        for i, a in enumerate(aArray):
+            weirdIdentity | PauliZProjector(target=i, a=a)
+        sim = qk.QiskitSimulator()
+        
+        qk_vector = sim.run(qubits, np.zeros(qubits), weirdIdentity)
+        qk_val = qk_vector.conjugate() @ qk_vector
+        print("qk_val: ", qk_val)
+        
+        data = cPSCS.compress_algorithm(qubits, measured_qubits, np.copy(gateArray), np.copy(controlArray), np.copy(targetArray), np.copy(aArray))
+        if type(data) == tuple:
+            tPrime, r, log_v, CH, AG = data
+            print(t, tPrime, r, log_v)
+        else:
+            print(data)
+
+        p = cPSCS.calculate_algorithm(qubits, measured_qubits, np.copy(gateArray), np.copy(controlArray), np.copy(targetArray), np.copy(aArray))
+        print(p)
+
+if __name__ == "__main__":
+    qubits = 10
+    t = 10
+    depth = 2000
+    circs = 1000
+    
+
+    #aArray = np.array([0 for _ in range(measured_qubits)], dtype=np.uint8)
+    #print("qubits = ", qubits)
+    #print("measured_qubits = ", measured_qubits)
+    #print("t = ", t)
+
+    qk_vals = np.zeros(circs)
+    calc_vals = np.zeros(circs)
+
+    for  i, circ in enumerate(util.random_clifford_circuits_with_bounded_T(qubits, depth, circs, t)):
+        print(i)
+        gateArray = np.zeros(len(circ.gates), dtype=np.uint8)
+        controlArray = np.zeros(len(circ.gates), dtype=np.uint)
+        targetArray = np.zeros(len(circ.gates), dtype=np.uint)
+        measured_qubits = np.random.randint(0, qubits)
+        aArray = np.random.randint(0,2,measured_qubits, dtype=np.uint8)
         
         for j, gate in enumerate(circ.gates):
             if isinstance(gate, CXGate):
@@ -315,9 +381,22 @@ if __name__ == "__v_r__":
             elif isinstance(gate, TGate):
                 gateArray[j] = 116 # t
                 targetArray[j] = gate.target
+        for i, a in enumerate(aArray):
+            circ | PauliZProjector(target=i, a=a)
+        sim = qk.QiskitSimulator()
+        
+        qk_vector = sim.run(qubits, np.zeros(qubits), circ)
+        qk_val = qk_vector.conjugate() @ qk_vector
+        qk_vals[i] = abs(qk_val)
 
-        cPSCS.print_v_r_info(qubits, measured_qubits, gateArray, controlArray, targetArray, aArray)
+        p = cPSCS.calculate_algorithm(qubits, measured_qubits, np.copy(gateArray), np.copy(controlArray), np.copy(targetArray), np.copy(aArray))[0]
+        #print("p = ", p)
+        calc_vals[i] = p
 
+    plt.plot(qk_vals, calc_vals,".")
+    plt.grid()
+    plt.show()
+        
 if __name__ == "__test__":
     qubits = 10
     t = 10
@@ -737,7 +816,7 @@ if __name__ == "__lhs_rank_test___":
     plt.ylabel("count")
     plt.show()
             
-if __name__ == "__main__":
+if __name__ == "__test-estimate__":
     # do some simulations make some graphs
     qubits = 40
     measured_qubits = 3

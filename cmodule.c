@@ -2917,21 +2917,21 @@ static PyObject * calculate_algorithm(PyObject* self, PyObject* args){
 
     //in the sequel we will assume that the CB measurement outcome we are interested in at the end is |0...0>
     //we "fix" this by applying a bunch of X gates to the measured qubits here
-    //for(int i = 0; i < measured_qubits; i++){
-    //   if((unsigned char)a->data[i*a->strides[0]]){
-    //       StabTable_X(state, i);
-    //   }
-    //}
+    for(int i = 0; i < measured_qubits; i++){
+       if((unsigned char)a->data[i*a->strides[0]]){
+           StabTable_X(state, i);
+       }
+    }
 
 
     int log_v = StabTable_apply_constraints(state, measured_qubits, t);
     if(log_v < 0){
-        return PyComplex_FromDoubles(0., 0.);
+       return PyComplex_FromDoubles(0., 0.);
     }
-    int idents = StabTable_apply_T_constraints(state,t);
+    //int idents = StabTable_apply_T_constraints(state,t);
 
     //now delete the first (n) = table->n - t (since table->n = n + t at this point) qubits
-    //at this point we should just be left with t qubits
+    // at this point we should just be left with t qubits
     int q_to_delete = state->n - t;
     int new_size = t;
     for(int s = 0; s < state->k; s++){
@@ -2977,27 +2977,13 @@ static PyObject * calculate_algorithm(PyObject* self, PyObject* args){
 	state->n = state->n - qubits_deleted;
     }
 
-    printf("before compute n=%d, k=%d, qubits_deleted=%d\n", state->n, state->k,qubits_deleted);
-    //printf("\n");StabTable_print(state);printf("\n");
-    //printf("2:\n");
-    //StabTable_print(state);
-    //printf("\n");
-    //printf("log_v = %d\n", log_v);
-    //printf("log_v = %d\nstate->n = %d\nstate->k = %d\n", log_v, state->n, state->k);
-
-
     //we explicitly compute the sum appearing in 10
-    //printf("t= %d, k = %d, r = %d\n", t, state->k, t-state->k);
-    //printf("state->k = %d\n", state->k);
-
     uint_bitarray_t full_mask = 0u;
     for(int i = 0; i < state->k; i++){
         full_mask |= (ONE << i);
     }
     double complex acc = 0.;
-    //clock_t end = clock();
-    //double FE_time = ((double)(end - start)) / (double)CLOCKS_PER_SEC;
-    //start = clock();
+
     for(uint_bitarray_t mask = 0u; mask < full_mask; mask++){
         unsigned char * row = calloc(2*state->n, sizeof(unsigned char));
         unsigned char phase = 0;
@@ -3151,12 +3137,16 @@ static PyObject * compress_algorithm(PyObject* self, PyObject* args){
     //we "fix" this by applying a bunch of X gates to the measured qubits here
     for(int i = 0; i < measured_qubits; i++){
        if((unsigned char)a->data[i*a->strides[0]]){
+	   //printf("flipping qubit %d\n", i);
            StabTable_X(state, i);
        }
     }
 
     int log_v = StabTable_apply_constraints(state, measured_qubits, t);
+    //printf("apply cons returned\n");
+    //StabTable_print(state);
     if(log_v < 0){
+	//printf("log_v = %d\n", log_v);
 	StabTable_free(state);
         return PyComplex_FromDoubles(0., 0.);
     }
@@ -3173,7 +3163,7 @@ static PyObject * compress_algorithm(PyObject* self, PyObject* args){
         for(int q = q_to_delete; q < state->n; q++){
             state->table[s][q-2*q_to_delete+state->n] = state->table[s][q+state->n];
         }
-        state->table[s] = realloc(state->table[s], sizeof(unsigned char) * 2 * new_size);
+        state->table[s] = (unsigned char *)realloc(state->table[s], sizeof(unsigned char) * 2 * new_size);
     }
     state->n = new_size;
 

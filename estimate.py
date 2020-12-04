@@ -20,19 +20,22 @@ def epsPrime(p, deltaTarg, eta, s, L, m,precision=0.01):
     #want to return eps such that
     #deltaPrime(p, eps, eta, s, LMin(deltaTarg, eta)+ L, m) = deltaTarg
 
-    #we know eps = 0 will make a delta that is too big
-    #we expect that eps = 1 will make a delta that is too small but can't guarantee this (I think)
-    #keep doubling epsUpper until we find an upper bound
-    epsLower = 0
-    epsUpper = 1
+    a = (np.power((2/s)*(2+np.log(2/deltaTarg))*np.power(1+m,2) + np.sqrt(p),2) - p)/eta
+    b = p*np.sqrt(np.log(1/deltaTarg)/L)/(1-eta - eta*np.sqrt(np.log(1/deltaTarg)/L))
 
-    while deltaPrime(p, epsUpper, eta, s, L+LMin(deltaTarg, eta), m) > deltaTarg:
-        epsLower = epsUpper
-        epsUpper *= 2
-        if epsUpper > 2**20:            
-            #print("WARNING: epsPrime function could not find a sensible upper bound")
-            return None
-    
+    #deltaPrime = 2*e^2 *exp(-s*(sqrt(p + eta*a) - sqrt(p))^2/(2*(m + 1)^2))
+    #deltaPrime = exp(-L*((1-eta)*b / (p+eta*b)))
+    #deltaPrime(p, a, eta, s, L, m) and deltaPrime(p, b, eta, s, L, m)  > deltaTarg
+    #so 0, a, b < epsPrime
+
+    #can we come up with some decent upper bound? - yes!
+    #c and d are not individually upper bounds but their max is
+    c = (np.power((2/s)*(2+np.log(1/deltaTarg))*np.power(1+m,2) + np.sqrt(p),2) - p)/eta
+    d = p*np.sqrt(np.log(0.5/deltaTarg)/L)/(1-eta - eta*np.sqrt(np.log(0.5/deltaTarg)/L))
+
+    eps_lower = max(a,b)    
+    eps_upper = max(c,d)
+        
     #so now the correct eps is between epsLower and epsUpper
     #just do midpoint division until we hit the required precision
     epsMid = (epsUpper + epsLower)/2

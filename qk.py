@@ -39,15 +39,19 @@ class QiskitSimulator(object):
             else:
                 raise TypeError("Only unitary Clifford gates and Z projectors supported! Recieved: {}".format(gate))
 
-        job = qiskit.execute(circuit, backend=self.backend,backend_options={"method": "statevector", "max_parallel_threads":10})
+        #job = qiskit.execute(circuit, backend = Aer.get_backend('unitary_simulator'))
+        #unitary = job.result().get_unitary()
         
-        #statevector = _rearange_state_vector(num_qubits, )
-        statevector = job.result().get_statevector(circuit)
+        job = qiskit.execute(circuit, backend=self.backend,backend_options={"method": "statevector", "max_parallel_threads":10})
+        #statevector = job.result().get_statevector(circuit)
+        statevector = _rearange_state_vector(num_qubits, job.result().get_statevector(circuit))
+        
+        #statevector = job.result().get_statevector(circuit)
         for projector in projectors:
             #we need to zero everything that we aren't projecting onto
             #this will be half of the entries of the state-vector
             target_qubit = projector[1]
-            bits_to_zero = None
+            bit_to_zero = None
             if projector[2] == 0:
                 bit_to_zero = '1'
             elif projector[2] == 1:
