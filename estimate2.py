@@ -15,7 +15,7 @@ def LMin(delta, eta):
     #print(delta, eta)
     return np.ceil(-np.power(eta/(1-eta), 2)*np.log(delta))
 
-def epsPrime(p, deltaTarg, eta, s, L, m,precision=1e-15):
+def epsPrime(p, deltaTarg, eta, s, LPlus, m,precision=1e-15):
     #want to return eps such that
     #deltaPrime(p, eps, eta, s, LMin(deltaTarg, eta)+ L, m) = deltaTarg
     #print("deltaTarg", deltaTarg)
@@ -37,10 +37,9 @@ def epsPrime(p, deltaTarg, eta, s, L, m,precision=1e-15):
     #epsUpper = max(c,d)
     epsLower = 0
     epsUpper = 1
-    while deltaPrime(p, epsUpper, eta, s, L, m) > deltaTarg:
+    while deltaPrime(p, epsUpper, eta, s, LPlus + LMin(deltaTarg, eta), m) > deltaTarg:
         epsLower = epsUpper
         epsUpper *= 2
-    #print(deltaTarg, epsLower, deltaPrime(p, epsLower, eta, s, L+LMin(deltaTarg, eta), m), epsUpper, deltaPrime(p, epsUpper, eta, s, L+LMin(deltaTarg, eta), m))
     
     #so now the correct eps is between epsLower and epsUpper
     #just do midpoint division until we hit the required precision
@@ -48,7 +47,7 @@ def epsPrime(p, deltaTarg, eta, s, L, m,precision=1e-15):
     while (epsUpper - epsLower)/epsMid > precision:
         #print(epsLower, epsUpper)
         epsMid = (epsUpper + epsLower)/2
-        d = deltaPrime(p, epsMid, eta, s, L, m)
+        d = deltaPrime(p, epsMid, eta, s, LPlus + LMin(deltaTarg, eta), m)
         if d > deltaTarg:
             epsLower = epsMid
         else:
@@ -57,29 +56,39 @@ def epsPrime(p, deltaTarg, eta, s, L, m,precision=1e-15):
     return epsMid
 
 
-def eps2(p, deltaTarg, eta, s, tau, m, precision):
-    L = tau/s
-    return epsPrime(p, deltaTarg, eta, s, L, m, precision)
+def eps2(p, deltaTarg, eta, s, tau, m, t, r,precision):
+    LPlus = (tau - s*t*t*(t-r))/(s*r*r*r) - LMin(deltaTarg, eta)
+    if LPlus < 0:
+        print(p, deltaTarg, eta, s, tau, m, t, r)
+    #print(s*t*t*(t-r) + s*L*r*r*r)
+    return epsPrime(p, deltaTarg, eta, s, LPlus, m, precision)
     
 
 
-def dDeltaPrimeDs(p, deltaTarg, s, tau, m, eta):
+def dDeltaPrimeDs(p, deltaTarg, s, tau, m, t, r, eta):
     """
     the derivative of eps2 with respect to s
     once we have substituted in L = tau/s
     """
-    L = tau/s
+    L = (tau - s*t*t*(t-r))/(s*r*r*r) - LMin(deltaTarg, eta)
     eps = epsPrime(p, deltaTarg, eta, s, L, m, precision=1e-15)
     
     a = -np.power(np.sqrt(p + eta*eps) - np.sqrt(p), 2)/(2*np.power(m + 1, 2))    
     b = -np.power((1-eta)*eps/(p+eta*eps), 2)
-    
-    #s_part = -2 * np.exp(2 - s )
 
-    return 2*np.exp(2)*a*np.exp(a*s) - np.exp(b*L)*b*tau/np.power(s,2)
+    return 2*np.exp(2)*a*np.exp(a*s) - np.exp(b*L)*b*(tau/(np.power(s,2))/r*r*r)
+    
+def dDeltaPrimeDsPositive(p, deltaTarg, s, tau, m, t, r, eta):
+    L = (tau - s*t*t*(t-r))/(s*r*r*r) - LMin(deltaTarg, eta)
+    eps = epsPrime(p, deltaTarg, eta, s, L, m, precision=1e-15)
+    
+    a = -np.power(np.sqrt(p + eta*eps) - np.sqrt(p), 2)/(2*np.power(m + 1, 2))    
+    b = -np.power((1-eta)*eps/(p+eta*eps), 2)
+
+    return ((np.log(-b*tau) - 2*np.log(float(s)) - 3*np.log(float(r)) + b*L) > (np.log(-a)+2+np.log(2.) + a*s))
     
     
-def eps_at_particular_eta(p, deltaTarg, tau, m, eta, precision=1e-15):
+def eps_at_particular_eta(p, deltaTarg, tau, m, eta, t, r, precision):
     """
     we evaluate the optimal epsilon for a fixed eta (varying s) 
     using the fact that the partial derivative of delta prime with respect to epsilon is non-negative
@@ -93,13 +102,14 @@ def eps_at_particular_eta(p, deltaTarg, tau, m, eta, precision=1e-15):
     #always the minimum s is 1
     #the maximum s is floor(tau / ceil(L_min(eta,delta)))
     s_min = 1
-    s_max = int(np.floor(tau / np.ceil(LMin(deltaTarg, eta))))
+    s_max = int(np.floor(tau / ( t*t*(t-r) + r*r*r*LMin(deltaTarg, eta))))
     #print(s_min, s_max)
     if s_min > s_max:
         #print(p, deltaTarg, tau, m, eta, s_min, s_max)
         return None
     if s_min == s_max:
-        return eps2(p, deltaTarg, eta, s_min, tau, m, precision), int(np.ceil(s_min))
+        #print("hello")
+        return eps2(p, deltaTarg, eta, s_min, tau, m, t, r, precision), int(np.ceil(s_min))
 
     #otherwise we have a range of s values to explore
     #we know that eps can have at most one fixed point with respect to s
@@ -112,11 +122,11 @@ def eps_at_particular_eta(p, deltaTarg, tau, m, eta, precision=1e-15):
 
     #step 1. we want to work out if eps is increasing or decreasing at the end points
 
-    s_min_eps_value = eps2(p, deltaTarg, eta, s_min, tau, m, precision)
-    s_max_eps_value = eps2(p, deltaTarg, eta, s_max, tau, m, precision)
+    s_min_eps_value = eps2(p, deltaTarg, eta, s_min, tau, m, t,r,precision)
+    s_max_eps_value = eps2(p, deltaTarg, eta, s_max, tau, m, t,r,precision)
     
-    decreasing_at_start = (dDeltaPrimeDs(p, deltaTarg, s_min, tau, m, eta) < 0)
-    decreasing_at_end = (dDeltaPrimeDs(p, deltaTarg, s_max, tau, m, eta) < 0)
+    decreasing_at_start = (not dDeltaPrimeDsPositive(p, deltaTarg, s_min, tau, m, t,r,eta))
+    decreasing_at_end = (not dDeltaPrimeDsPositive(p, deltaTarg, s_max, tau, m, t,r,eta))
 
     #this covers the cases where eps is monotone increasing or monotone decreasing over the whole range
     if decreasing_at_start == decreasing_at_end:
@@ -146,10 +156,10 @@ def eps_at_particular_eta(p, deltaTarg, tau, m, eta, precision=1e-15):
     
     while width > 1.5:
         midpoint = s_min + width/2.
-        deriv_at_midpoint = dDeltaPrimeDs(p, deltaTarg, midpoint, tau, m, eta)
-        midpoint_eps_value = eps2(p, deltaTarg, eta, midpoint, tau, m, precision)
+        deriv_at_midpoint_positive = dDeltaPrimeDsPositive(p, deltaTarg, midpoint, tau, m, t,r,eta)
+        midpoint_eps_value = eps2(p, deltaTarg, eta, midpoint, tau, m, t,r,precision)
         #print(midpoint_eps_value, midpoint_adj_eps_value)
-        if deriv_at_midpoint > 0:
+        if deriv_at_midpoint_positive:
             #at the midpoint eps is increasing 
             s_max = midpoint
             s_max_eps_value = midpoint_eps_value
@@ -165,13 +175,12 @@ def eps_at_particular_eta(p, deltaTarg, tau, m, eta, precision=1e-15):
     else:
         return s_max_eps_value, int(np.ceil(s_max))
     
-def epsStar(p, deltaTot, tau, m, eta_prec=1e-7, deriv_prec=0.2, eps_prec=1e-15):
-
+def epsStar(p, deltaTot, tau, m, t, r, eta_prec=1e-7, deriv_prec=0.2, eps_prec=1e-15):
     #start with an initial guess for eta in the middle of the interval
     eta = 0.5
 
-    eta_eps, s = eps_at_particular_eta(p, deltaTot, tau, m, eta, eps_prec)
-    eta_adj_eps, s = eps_at_particular_eta(p, deltaTot, tau, m, eta + deriv_prec, eps_prec)
+    eta_eps, s = eps_at_particular_eta(p, deltaTot, tau, m, eta, t, r, eps_prec)
+    eta_adj_eps, s = eps_at_particular_eta(p, deltaTot, tau, m, eta + deriv_prec, t,r,eps_prec)
 
     lower_eta_bound = None
     upper_eta_bound = None
@@ -184,8 +193,8 @@ def epsStar(p, deltaTot, tau, m, eta_prec=1e-7, deriv_prec=0.2, eps_prec=1e-15):
             lower_eta_bound = upper_eta_bound
             upper_eta_bound = (1+upper_eta_bound)/2.
             #print("upper_eta_bound = ", upper_eta_bound)
-            upper_eps, s = eps_at_particular_eta(p, deltaTot, tau, m, upper_eta_bound, eps_prec)
-            upper_adj_eps, s = eps_at_particular_eta(p, deltaTot, tau, m, upper_eta_bound - deriv_prec, eps_prec)
+            upper_eps, s = eps_at_particular_eta(p, deltaTot, tau, m, upper_eta_bound, t,r,eps_prec)
+            upper_adj_eps, s = eps_at_particular_eta(p, deltaTot, tau, m, upper_eta_bound - deriv_prec, t,r,eps_prec)
             #print("epss = ", upper_adj_eps, upper_eps)
             if upper_adj_eps < upper_eps:
                 found_upper_bound = True
@@ -196,8 +205,8 @@ def epsStar(p, deltaTot, tau, m, eta_prec=1e-7, deriv_prec=0.2, eps_prec=1e-15):
         while not found_lower_bound:
             upper_eta_bound = lower_eta_bound
             lower_eta_bound = lower_eta_bound/2.
-            lower_eps, s = eps_at_particular_eta(p, deltaTot, tau, m, lower_eta_bound, eps_prec)
-            lower_adj_eps, s = eps_at_particular_eta(p, deltaTot, tau, m, lower_eta_bound + deriv_prec, eps_prec)
+            lower_eps, s = eps_at_particular_eta(p, deltaTot, tau, m, lower_eta_bound, t,r,eps_prec)
+            lower_adj_eps, s = eps_at_particular_eta(p, deltaTot, tau, m, lower_eta_bound + deriv_prec, t,r,eps_prec)
             #print(p, deltaTot, tau, m, lower_eta_bound, eps_prec, deriv_prec)
             #print(lower_eps, lower_adj_eps)
             if lower_eps > lower_adj_eps:
@@ -209,8 +218,8 @@ def epsStar(p, deltaTot, tau, m, eta_prec=1e-7, deriv_prec=0.2, eps_prec=1e-15):
     midpoint_eps, s = None, None
     while width > eta_prec:
         midpoint = lower_eta_bound + width/2.
-        midpoint_eps, s = eps_at_particular_eta(p, deltaTot, tau, m, midpoint, eps_prec)
-        midpoint_adj_eps, s2 = eps_at_particular_eta(p, deltaTot, tau, m, midpoint + width*deriv_prec, eps_prec)
+        midpoint_eps, s = eps_at_particular_eta(p, deltaTot, tau, m, midpoint, t,r,eps_prec)
+        midpoint_adj_eps, s2 = eps_at_particular_eta(p, deltaTot, tau, m, midpoint + width*deriv_prec, t,r,eps_prec)
 
         if midpoint_eps < midpoint_adj_eps:
             #the derivative is positive at the midpoint
@@ -219,29 +228,32 @@ def epsStar(p, deltaTot, tau, m, eta_prec=1e-7, deriv_prec=0.2, eps_prec=1e-15):
             lower_eta_bound = midpoint
         width = upper_eta_bound - lower_eta_bound
 
-    LPlusBest = int(np.ceil(tau/s - LMin(deltaTot, midpoint)))
+    LPlusBest = int(np.ceil((tau - s*t*t*(t-r))/(s*r*r*r) - LMin(deltaTot, eta)))
+    #if LPlusBest < 0:
+    #    print(eta, deltaTot, LMin(deltaTot, eta))
     return (midpoint_eps, midpoint, s, LPlusBest)
-    
 
-def optimize(epsTot, deltaTot, tPrime, measured_qubits, r, log_v, m, CH, AG, seed=None, threads=10):
+
+
+def optimize(epsTot, deltaTot, t, measured_qubits, r, log_v, m, CH, AG, seed=None, threads=10):
     if seed != None:
         random.seed(seed)
     
     pStar = 1
     exitCondition = False
     k = 0
-    s = -2*np.power(m + 1, 2)*np.log(deltaTot/(2*np.exp(2)))/epsTot
+    s = np.ceil(-2*np.power(m + 1, 2)*np.log(deltaTot/(2*np.exp(2)))/epsTot)
     L = 1
-    tauZero = s*L   
-
+    tauZero = s*t*t*(t-r) + s*L*r*r*r
+    
     #print(tauZero)
     while not exitCondition:
         k += 1
         dtime = time.monotonic()
         #if np.power(2,k)*tauZero > 2000:
-        eStar, eta, s, LPlus = epsStar(pStar, 6*deltaTot/np.power(np.pi*k,2), np.power(2,k)*tauZero, m)
+        eStar, eta, s, LPlus = epsStar(pStar, 6*deltaTot/np.power(np.pi*k,2), np.power(2,k)*tauZero, m,t,r)
+        #print(eStar, eta,s,LPlus, LMin(6*deltaTot/np.power(np.pi*k,2), eta), flush=True)
         #print(6*deltaTot/np.power(np.pi*k,2), deltaPrime(pStar, eStar, eta, s, LPlus+LMin(6*deltaTot/np.power(np.pi*k,2), eta), m))
-        #print(eStar, eta,s,LPlus, LMin(6*deltaTot/np.power(np.pi*k,2), eta))
         #else:
         #    LPlus = 20
         #    eta = 0.5
@@ -275,35 +287,97 @@ def optimize(epsTot, deltaTot, tPrime, measured_qubits, r, log_v, m, CH, AG, see
         estimate_time = time.monotonic() - dtime
         print(k, pStar, pHat, eStar, epsTot, s, totalL, LPlus, eta, 6*deltaTot/np.power(np.pi*k,2), optimize_time, estimate_time)
     return pStar
+
+def optimize_with_phases(epsTot, deltaTot, t, measured_qubits, r, log_v, m, CH, AG, phases, seed=None, threads=10):
+    if seed != None:
+        random.seed(seed)
     
-def hackedOptimise(p, m, epsTot, deltaTot):
-    exitCondition = False
-    #k = 0
-    s = -2*np.power(np.sqrt(m) + 1, 2)*np.log(deltaTot/(2*np.exp(2)))/epsTot
-    L = 1
-    tauZero = s*L
-    k = 0
-    K = 0
     pStar = 1
+    exitCondition = False
+    k = 0
+    s = np.ceil(-2*np.power(np.sqrt(m) + 1, 2)*np.log(deltaTot/(2*np.exp(2)))/epsTot)
+    L = 1
+    tauZero = s*t*t*(t-r) + s*L*r*r*r
+    K = 0
     #print(tauZero)
     while not exitCondition:
         k += 1
-        eStar, eta, s, LPlus = epsStar(pStar, 6*deltaTot/np.power(np.pi*k,2), np.power(2,k)*tauZero, m)
-        #print(p, eStar, eta,s,LPlus, LMin(6*deltaTot/np.power(np.pi*k,2), eta))
-        K += s*(LPlus + LMin(6*deltaTot/np.power(np.pi*k,2), eta))
+        dtime = time.monotonic()
+        #if np.power(2,k)*tauZero > 2000:
+        #print("cost = ", np.power(2,k)*tauZero)
+        eStar, eta, s, LPlus = epsStar(pStar, 6*deltaTot/np.power(np.pi*k,2), np.power(2,k)*tauZero, m,t,r)
+        K += s*t*t*(t-r) + s*(LPlus + LMin(6*deltaTot/np.power(np.pi*k,2), eta))*r*r*r
+        #print("actual cost = ", s*t*t*(t-r) + s*(LPlus+LMin(6*deltaTot/np.power(np.pi*k,2), eta))*r*r*r)
+        #print(6*deltaTot/np.power(np.pi*k,2), deltaPrime(pStar, eStar, eta, s, LPlus+LMin(6*deltaTot/np.power(np.pi*k,2), eta), m))
+        #else:
+        #    LPlus = 20
+        #    eta = 0.5
+        #    s = int(np.ceil(np.power(2,k)*tauZero/(LPlus+LMin(6*deltaTot/np.power(np.pi*k,2), eta))))
+        #    eStar = epsPrime(pStar, 6*deltaTot/np.power(np.pi*k,2), eta, s, LPlus+LMin(6*deltaTot/np.power(np.pi*k,2), eta), m)
+        optimize_time = time.monotonic() - dtime
         
+        if eStar < epsTot:
+            exitCondition = True
+
+        
+        totalL = int(np.ceil(LPlus + LMin(6*deltaTot/np.power(np.pi*k,2), eta)))
+        #print(eta, s, totalL, LPlus, LMin(6*deltaTot/np.power(np.pi*k,2), eta), measured_qubits, log_v, r)
+        pHat = None
+        if totalL >= 10:
+            #def run_estimate_algorithm(seed):
+            #    v1 = cPSCS.estimate_algorithm(int(round(s)), totalL, measured_qubits, log_v, r, seed, CH, AG).real
+            #    return v1
+            with Pool(threads) as p:
+                seedvec = [random.randrange(1,10000) for _ in range(threads)]
+                ans = p.starmap(cPSCS.estimate_algorithm_with_arbitrary_phases, [(int(round(s)), int(np.ceil(totalL/threads)), measured_qubits, log_v, r, seed, CH, AG, phases) for seed in seedvec] )
+                mean_val = 0                
+                for val in ans:
+                    mean_val += val.real/threads
+                pHat = mean_val
+                
+        else:
+            pHat = cPSCS.estimate_algorithm_with_arbitrary_phases(int(round(s)), totalL, measured_qubits, log_v, r, random.randrange(1,10000), CH, AG, phases).real
+        
+        pStar = max(0, min(1, pStar, pHat + eStar))
+        estimate_time = time.monotonic() - dtime
+        print(k, pStar, pHat, eStar, epsTot, s, totalL, LPlus, eta, 6*deltaTot/np.power(np.pi*k,2), optimize_time, estimate_time)
+    return pStar, K
+
+
+def hackedOptimise(p, m, epsTot, deltaTot, t, r, delta_UB, K_UUB):
+    exitCondition = False
+    #k = 0
+    s = np.ceil(-2*np.power(np.sqrt(m) + 1, 2)*np.log(deltaTot/(2*np.exp(2)))/epsTot)
+    L = 1
+    tauZero = s*t*t*(t-r) + s*L*r*r*r
+    k = 0
+    #K = 0
+    pStar = 1
+    #print(tauZero*np.power(2,k))
+    #print(m, epsTot, deltaTot, t, r, delta_UB, K_UUB)
+    while not exitCondition:
+        k += 1
+        eStar, eta, s, LPlus = epsStar(pStar, 6*deltaTot/np.power(np.pi*k,2), np.power(2,k)*tauZero, m,t,r)
+        #print(p, eStar, eta,s,LPlus, LMin(6*deltaTot/np.power(np.pi*k,2), eta))
+        #K += s*t*t*(t-r) + s*(LPlus + LMin(6*deltaTot/np.power(np.pi*k,2), eta))*r*r*r
         if eStar < epsTot:
             exitCondition = True
         totalL = int(round(LPlus + LMin(6*deltaTot/np.power(np.pi*k,2), eta)))
         #print(eta, s, totalL, LPlus, LMin(6*deltaTot/np.power(np.pi*k,2), eta), measured_qubits, log_v, r)
 
-        pHat = p
+        min_eps_prime = float("inf")
+        for eta_tilde in np.linspace(1/100, 1-1/100, 100):
+            if LPlus + LMin(6*deltaTot/np.power(np.pi*k,2), eta) - LMin(delta_UB/K_UUB, eta_tilde) >= 1:
+                val = epsPrime(p, delta_UB/K_UUB, eta, s, LPlus + LMin(6*deltaTot/np.power(np.pi*k,2), eta) - LMin(delta_UB/K_UUB, eta_tilde), m, precision=1e-15)
+                if val < min_eps_prime:
+                    min_eps_prime = val
+        pHat = p + min_eps_prime
         
         pStar = max(0, min(1, pStar, pHat + eStar))
-
-        #print(k, pStar, pHat, eStar, epsTot, s, totalL, LPlus, eta, 6*deltaTot/np.power(np.pi*k,2))
+        #print("k pStar pHat eStar epsTot s totalL LPlus eta 6*deltaTot/np.power(np.pi*k2) LMin(6*deltaTot/np.power(np.pi*k2) eta) LMin(delta_UB/K_UUB eta_tilde)")
+        #print(k, pStar, pHat, eStar, epsTot, s, totalL, LPlus, eta, 6*deltaTot/np.power(np.pi*k,2), LMin(6*deltaTot/np.power(np.pi*k,2), eta), LMin(delta_UB/K_UUB, eta_tilde))
     #print(p, K)
-    return p, K
+    return p, k, (tauZero*(2**(k+1)))
     
     
 
@@ -321,17 +395,31 @@ if __name__ == "__main__":
     
     #s = 100000
     #L = 1000
-    ps = np.linspace(0.01,0.99, 99, endpoint=True)
-    Ks = np.zeros_like(ps)
+    # ps = np.linspace(0.01,0.99, 20, endpoint=True)
+    # Ks = np.zeros_like(ps)
     
-    eps = 0.05
-    deltaTot = 1e-3
+    # eps = 0.05
+    # deltaTot = 1e-3
 
-    for i, p in enumerate(ps):
-        p, K = hackedOptimise(p, m, eps, deltaTot)
-        print(p, K)
-        Ks[i] = K
-    plt.plot(ps, Ks)
+    # for i, p in enumerate(ps):
+    #     p, K = hackedOptimise(p, m, eps, deltaTot)
+    #     print(p, K)
+    #     Ks[i] = K
+    # plt.plot(ps, Ks)
+    # plt.grid()
+    # plt.show()
+
+    p=0.5
+    deltaTarg = 0.00000187631821559884
+    tau = np.power(2,19)*411058688.0
+    
+    etas = np.linspace(0.01,0.99,100)
+    epss = np.zeros_like(etas)
+    for i, eta in enumerate(etas):
+        eps, s = eps_at_particular_eta(p, deltaTarg, tau, 12.598212529123684, eta,t,8,1e-15)
+        epss[i] = eps
+
+    plt.plot(etas,epss)
     plt.grid()
     plt.show()
-    
+                          

@@ -18,6 +18,7 @@ import sys
 from matplotlib import pyplot as plt
 import cPSCS
 import estimate
+import estimate2
 from multiprocessing import Pool
 
 
@@ -737,20 +738,19 @@ if __name__ == "__lhs_rank_test___":
     plt.ylabel("count")
     plt.show()
             
-if __name__ == "__estimate-test__":
+if __name__ == "__main__":
     # do some simulations make some graphs
     qubits = 40
     measured_qubits = 3
-    print("n = ", qubits)
-    print("w = ", measured_qubits)
     circs = 1
-    depth = 100000
+    depth = 10000
     t = 50
+    print("n = ", qubits)
+    print("w = ", measured_qubits)    
     print("t =", t)
 
     #magic_samples = 1000
     #equatorial_samples = 1000
-    seed = 5952 #random seed we give to the c code to generate random equatorial and magic samples
     # make the w qubits the first 8
     mask = np.array([1 for _ in range(measured_qubits)] + [0 for _ in range(qubits-measured_qubits)], dtype=np.uint8)
     #project them all on to the 0 state since it doesn't really matter
@@ -760,13 +760,13 @@ if __name__ == "__estimate-test__":
     s2_time = 0
 
     #epss = [0.1, 0.01,0.001]
-    epss = [.01]
+    epss = [.02]
     
     delta = 0.01
     gamma = math.log2(4-2*math.sqrt(2))
     #random.seed(15111)
     #seed = random.randint(100,100000)
-    seed = 1923
+    seed = 81714 #6666 #9123 #34234
     #seed = 21517
     print("seed=",seed)
     random.seed(seed)
@@ -798,103 +798,26 @@ if __name__ == "__estimate-test__":
         #for i, (a,m) in enumerate(zip(aArray, mask)):
         #   if m:
         #       circ | PauliZProjector(target=i, a=a)
-        #d_time = time.monotonic_ns()
-        #sim = qk.QiskitSimulator()
-        #qk_vector = sim.run(qubits, np.zeros(qubits), circ)
-        #qk_val = (qk_vector.conjugate() @ qk_vector).real
-        #qk_time = time.monotonic_ns() - d_time
-        #print(qk_val, qk_time)
-        #qk_val = np.power(2., -measured_qubits)
 
         d_time = time.monotonic()
         comp_val = cPSCS.calculate_algorithm(qubits, measured_qubits, np.copy(gateArray), np.copy(controlArray), np.copy(targetArray), np.copy(aArray))        
         comp_time = time.monotonic() - d_time
-        print("compute_algorithm: {:.16f}".format(comp_val[0]), "took", comp_time, "seconds")
+        print("compute_algorithm: {:.16f}".format(comp_val), "took", comp_time, "seconds")
         
-        #magic_samples = int(round(((2*(math.pow(2,gamma*t/2)+qk_val)**2)/((math.sqrt( (1+relative_eps)*qk_val) - math.sqrt(qk_val))**2))/(math.log(delta/(2*relative_eps*relative_eps*qk_val*qk_val)))))
-        #equatorial_samples = int(round(((((1+relative_eps))/(relative_eps))**2)*(-np.log(delta))))
         for eps in epss:
-            # print(eps)
-            # meps = 0.5*eps
-            # magic_samples = int(round((2*((pow(2,gamma*t/2) +qk_val)**2)/((math.sqrt(qk_val + meps) - math.sqrt(qk_val))**2))*(-math.log(delta/(2*math.e*math.e)))))
-            # equatorial_samples = int(round((((qk_val + meps)/(eps-meps))**2)*(-np.log(delta))))
-            # best_ratio = 0.5            
-            # for ratio in range(1,99):
-            #     meps2 = ratio*eps/100.
-            #     magic_samplesr = 2*math.pow((math.pow(2.,gamma*t/2) + math.sqrt(qk_val))/(math.sqrt(qk_val + meps2) - math.sqrt(qk_val)), 2.)*math.log(2*math.e*math.e/(delta/2))
-            #     equatorial_samplesr = math.pow((qk_val + meps2)/(eps-meps2), 2.)*math.log(1/(delta/2.))
-            #     magic_samplesr = int(round(magic_samplesr))
-            #     equatorial_samplesr = int(round(equatorial_samplesr))
-
-            #     if 0 < magic_samplesr*equatorial_samplesr < magic_samples*equatorial_samples:
-            #         best_ratio = ratio
-            #         magic_samples = magic_samplesr
-            #         equatorial_samples = equatorial_samplesr
             
-            # print(magic_samples, equatorial_samples, best_ratio)
-            # print("qk:", qk_val)
-            #d_time = time.monotonic_ns()
-            
-            #v1 = cPSCS.magic_sample_1(qubits,magic_samples, equatorial_samples, seed,  np.copy(gateArray), np.copy(controlArray), np.copy(targetArray), np.copy(aArray), np.copy(mask))
-            #s1_time += time.monotonic_ns() - d_time
-            #print("v1:", v1)
-            #print(s1_time/1e9)
-            
-            #d_time = time.monotonic_ns()
-            #v2 = cPSCS.magic_sample_2(qubits,magic_samples, equatorial_samples, seed,  np.copy(gateArray), np.copy(controlArray), np.copy(targetArray), np.copy(aArray), np.copy(mask))
-            #s2_time += time.monotonic_ns() - d_time
-            
-            #print("v2:", v2)
+            d, r, t, delta_d, delta_t, delta_t_prime, final_d, final_t, log_v, CH, AG, magic_arr = cPSCS.compress_algorithm(qubits, measured_qubits, np.copy(gateArray), np.copy(controlArray), np.copy(targetArray), np.copy(aArray))
+            print(t,r,log_v, final_t)
 
-            #v3 = cPSCS.main_simulation_algorithm(qubits, magic_samples, equatorial_samples, seed,  measured_qubits, np.copy(gateArray), np.copy(controlArray), np.copy(targetArray), np.copy(aArray))
-
-            
-            #print("v3: ", v3)
-            #v4 = cPSCS.main_simulation_algorithm2(qubits, magic_samples, equatorial_samples, seed,  measured_qubits, np.copy(gateArray), np.copy(controlArray), np.copy(targetArray), np.copy(aArray))
-            #print("v4: ", v4)
-            #print("qk:",qk_val)
-
-            t, r, log_v, CH, AG = cPSCS.compress_algorithm(qubits, measured_qubits, np.copy(gateArray), np.copy(controlArray), np.copy(targetArray), np.copy(aArray))
-            print(t,r,log_v)
-            print(AG)
-            
-            #p = cPSCS.estimate_algorithm(1000, 100, measured_qubits, log_v, r, seed, CH, AG)
-            #print(p)
-
-            # dtime = time.monotonic()
-            # with Pool(threads) as p:                
-            #     seedvec = [random.randrange(1,10000) for _ in range(threads)]
-            #     dtime = time.monotonic()
-            #     ans = p.starmap(cPSCS.estimate_algorithm, [(magic_samples, int(np.ceil(equatorial_samples/threads)), measured_qubits, log_v, r, seed, CH, AG) for seed in seedvec] )
-            #     mean_val = 0                
-            #     for val in ans:
-            #         mean_val += val.real/threads
-            #     pHat = mean_val
-            #     estimateTime = time.monotonic() - dtime
-            #     print("estimate: ", pHat, eps, estimateTime)
-            #     dtime = time.monotonic()
-            #     ans2 = p.starmap(cPSCS.main_simulation_algorithm, [(qubits, magic_samples, equatorial_samples, seed,  measured_qubits, np.copy(gateArray), np.copy(controlArray), np.copy(targetArray), np.copy(aArray)) for seed in seedvec])
-
-            #     mean_val2 = 0                
-            #     for val in ans2:
-            #         mean_val2 += val.real/threads
-            #     estimateTime2 = time.monotonic() - dtime
-            #     print("main sim: ", mean_val2, estimateTime2)
             beta = np.log2(4. - 2.*np.sqrt(2.));
-            m = np.power(2, beta*t/2)
-            p = estimate.optimize(eps, delta, t,measured_qubits, r, log_v, m, CH, AG)
+            m = np.power(2, beta*final_t/2)
+            p = estimate2.optimize(eps, delta, t, measured_qubits, r, log_v, m, CH, AG)
             print(p)
-            #print("optimise: ", p)
-            #v5 = cPSCS.estimate_algorithm(magic_samples, equatorial_samples, measured_qubits,log_v,r, pyChState, pyAGState)
-            #print("v5: ", v5)
-            # print(s2_time/1e9)
-        
-            #print()
-            #print(qk_time/1e9, s1_time/1e9,s2_time/1e9)
-            #print("-------------------")
-                
 
-if __name__ == "__main__":
+
+
+            
+if __name__ == "__test__":
     qubits = 15
     t = 20
     depth = 1000
@@ -956,8 +879,8 @@ if __name__ == "__main__":
     plt.show()
             
 
-if __name__ == "__id__":
-    qubits = 4
+if __name__ == "__inverse-test__":
+    qubits = 100
     t = 4
     depth = 5
     circs = 1
@@ -970,11 +893,11 @@ if __name__ == "__id__":
     
 
     for  i, circ in enumerate(util.random_clifford_circuits_with_bounded_T(qubits, depth, circs, t)):
-        #uDagger  = circ.inverse()
+        uDagger  = circ.inverse()
         weirdIdentity = CompositeCliffordGate()
-        #weirdIdentity.gates = circ.gates + uDagger.gates
+        weirdIdentity.gates = circ.gates + uDagger.gates
         #weirdIdentity.gates = [CZGate(2, 0), TGate(0), HGate(2), TGate(1), TGate(2), SGate(2), SGate(2), SGate(2), TGate(2), SGate(1), SGate(1), SGate(1), TGate(1), HGate(2), SGate(0), SGate(0), SGate(0), TGate(0), CZGate(2, 0)
-        weirdIdentity.gates = [CXGate(0, 1), TGate(1), HGate(1), CXGate(3, 1), HGate(1), TGate(3), TGate(0), TGate(1), HGate(3), SGate(3)]
+        #weirdIdentity.gates = [CXGate(0, 1), TGate(1), HGate(1), CXGate(3, 1), HGate(1), TGate(3), TGate(0), TGate(1), HGate(3), SGate(3)]
         #weirdIdentity.gates = [HGate(1), TGate(1), CXGate(1, 0), TGate(1), CXGate(1, 0)]
         #weirdIdentity.gates = [TGate(4), TGate(9), HGate(5), TGate(7), TGate(2), TGate(0), HGate(5), CXGate(5, 0), HGate(4), CXGate(8, 5), TGate(4), CXGate(6, 0), TGate(9), TGate(6), CZGate(4, 3), TGate(2), SGate(5), HGate(5), TGate(3), CXGate(3, 9), CXGate(3, 9), SGate(3), TGate(3), HGate(5), SGate(5), SGate(5), SGate(5), SGate(2), TGate(2), CZGate(4, 3), SGate(6), TGate(6), SGate(9), TGate(9), CXGate(6, 0), SGate(4), TGate(4), CXGate(8, 5), HGate(4), CXGate(5, 0), HGate(5), SGate(0), TGate(0), SGate(2), TGate(2), SGate(7), TGate(7), HGate(5), SGate(9), TGate(9), SGate(4), TGate(4)]
         #weirdIdentity = CompositeCliffordGate()
@@ -1005,13 +928,13 @@ if __name__ == "__id__":
                 targetArray[j] = gate.target
         for i, a in enumerate(aArray):
             weirdIdentity | PauliZProjector(target=i, a=a)
-        sim = qk.QiskitSimulator()
+        #sim = qk.QiskitSimulator()
+        #
+        #qk_vector = sim.run(qubits, np.zeros(qubits), weirdIdentity)
+        #qk_val = qk_vector.conjugate() @ qk_vector
+        #print("qk_val: ", qk_val)
         
-        qk_vector = sim.run(qubits, np.zeros(qubits), weirdIdentity)
-        qk_val = qk_vector.conjugate() @ qk_vector
-        print("qk_val: ", qk_val)
-        
-        #data = cPSCS.compress_algorithm(qubits, measured_qubits, np.copy(gateArray), np.copy(controlArray), np.copy(targetArray), np.copy(aArray))
+        data = cPSCS.compress_algorithm(qubits, measured_qubits, np.copy(gateArray), np.copy(controlArray), np.copy(targetArray), np.copy(aArray))
         #if type(data) == tuple:
         #    tPrime, r, log_v, CH, AG = data
         #    print(t, tPrime, r, log_v)

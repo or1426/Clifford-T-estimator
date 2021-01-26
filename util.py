@@ -138,19 +138,32 @@ def random_clifford_circuits(qubits, depth, N):
 #     for target, a, circuit in zip(random.choices(range(qubits), k=N), random.choices(range(1), k=N), random_clifford_circuits(qubits, depth, N)):
 #         yield circuit | measurement.PauliZProjector(target,a)
 
-def random_clifford_circuits_with_bounded_T(qubits, depth, N, T):
+def random_clifford_circuits_with_bounded_T(qubits, depth, N, T,rng=None):
     #some Clifford gate constructors take two params and some take 1
+    if rng==None:
+        rng = random
+    
     cliffords = [gates.cliffords.SGate, gates.cliffords.CZGate, gates.cliffords.CXGate, gates.cliffords.HGate]
     params_dict = {gates.cliffords.SGate: 1, gates.cliffords.CZGate: 2,gates.cliffords.CXGate: 2,gates.cliffords.HGate:1, gates.TGate:1} 
     count = 0
     for _ in range(N):
-        gs = random.choices(cliffords, k=depth)
-        positions = random.sample(range(len(gs)), T)
+        gs = rng.choices(cliffords, k=depth)
+        positions = rng.sample(range(len(gs)), T)
         for pos in positions:
             gs[pos] = gates.TGate
 
-        yield gates.cliffords.CompositeCliffordGate([g(*random.sample(range(qubits), k=params_dict[g])) for g in gs])
+        yield gates.cliffords.CompositeCliffordGate([g(*rng.sample(range(qubits), k=params_dict[g])) for g in gs])
 
+def random_clifford_circuits_with_fixed_T_positions(qubits, clifford_depth, N, T):
+    for _ in range(N):
+        circ = list(random_clifford_circuits(qubits, clifford_depth, 1))[0]
+
+        for _ in range(T):
+            circ | gates.TGate(random.randrange(qubits))
+            circ | list(random_clifford_circuits(qubits, clifford_depth, 1))[0]
+                    
+        yield circ
+        
 def random_clifford_circuits_with_T(qubits, depth, N):
     #some Clifford gate constructors take two params and some take 1
     params_dict = {gates.cliffords.SGate: 1, gates.cliffords.CZGate: 2,gates.cliffords.CXGate: 2,gates.cliffords.HGate:1, gates.TGate:1} 

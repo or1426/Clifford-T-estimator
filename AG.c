@@ -165,6 +165,47 @@ unsigned char StabTable_rowsum2(StabTable * table, unsigned char * row, unsigned
     return 0;
 }
 
+int StabTable_delete_all_identity_qubits(StabTable * state, int * magic_qubit_numbers){
+    int qubits_deleted = 0;
+    for(int q = 0; q < state->n; q++){
+	int non_identity_paulis = 0;
+	for(int s = 0; (s < state->k) && (non_identity_paulis == 0); s++){
+	    if((state->table[s][q] == 1) || (state->table[s][q+state->n] == 1)){
+		non_identity_paulis += 1;
+	    }
+	}
+	if(non_identity_paulis == 0){
+	    //every stabiliser is identity on this qubit
+	    //so we can just delete this qubit
+	    qubits_deleted += 1;
+	}else{
+	    if(qubits_deleted > 0){
+		for(int s = 0; s < state->k; s++){
+		    state->table[s][q-qubits_deleted] = state->table[s][q];
+		    state->table[s][q+state->n-qubits_deleted] = state->table[s][q+state->n];
+		}
+		if(magic_qubit_numbers != NULL){
+		    magic_qubit_numbers[q-qubits_deleted] = magic_qubit_numbers[q];
+		}
+	    }
+	}
+    }
+    //now move all the Z guys left to fill the gap we just made
+    if(qubits_deleted > 0){
+	for(int s = 0; s < state->k; s++){
+	    for(int q = 0; q < state->n; q++){
+		state->table[s][q+state->n-qubits_deleted] = state->table[s][q+state->n];
+	    }
+	    state->table[s] = (unsigned char *)realloc(state->table[s], 2*(state->n - qubits_deleted)*sizeof(unsigned char));
+	}
+	state->n = state->n - qubits_deleted;
+	if(magic_qubit_numbers != NULL){
+	    magic_qubit_numbers = realloc(magic_qubit_numbers, state->n);					  
+	}
+
+    }
+    return qubits_deleted;
+}
 
 int StabTable_first_non_zero_in_col(StabTable * table, int col, int startpoint){
     for(int i = startpoint; i < table->k; i++){
@@ -689,7 +730,7 @@ int StabTable_apply_constraints(StabTable * table, int w, int t){
  */
 int StabTable_apply_T_constraints(StabTable * table, int t){
     int starting_rows = table->k;
-    int idents = 0;
+    int deleted_rows = 0;
     for(int reps = 0; reps < starting_rows; reps++){	
         for(int q=table->n-t; q < table->n; q++){ //iterate over all the magic qubits
             int x_and_z_stab= -1; //store the index of the first stab we come to with both x and z = 1 on this qubit
@@ -735,15 +776,10 @@ int StabTable_apply_T_constraints(StabTable * table, int t){
 
 
             if((z_and_not_x_stab >= 0) && (x_and_not_z_stab < 0)){
-                //printf("z_and_not_x_stab = %d\ntable->table[z_and_not_x_stab][q+table->n] = %u\ntable->table[z_and_not_x_stab][q] = %u\n", z_and_not_x_stab,table->table[z_and_not_x_stab][q+table->n],table->table[z_and_not_x_stab][q]);
-                int idents_this_col = 0;
                 //kill all other z stuff on this qubit
                 for(int s = 0; s < table->k; s++){
                     if((s != z_and_not_x_stab) && (table->table[s][q+table->n] == 1)){
                         StabTable_rowsum(table,s, z_and_not_x_stab);
-                    }
-                    if((table->table[s][q] == 0) && (table->table[s][q+table->n] == 0)){
-                        idents_this_col += 1;
                     }
                 }
                 //now delete the z guy
@@ -752,12 +788,9 @@ int StabTable_apply_T_constraints(StabTable * table, int t){
                 table->k = table->k-1;
                 table->table = (unsigned char **)realloc(table->table, table->k*sizeof(unsigned char *));
                 table->phases = (unsigned char *)realloc(table->phases, table->k*sizeof(unsigned char));
-
-                if(idents_this_col == table->k){
-                    idents += 1;
-                }
+		deleted_rows += 1;
             }
         }
     }
-    return idents;
+    return deleted_rows;
 }

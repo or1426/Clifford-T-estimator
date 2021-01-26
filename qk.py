@@ -14,7 +14,7 @@ class QiskitSimulator(object):
         self.backend = Aer.get_backend("statevector_simulator") #QasmSimulator({"method": "statevector_"})
         ##self.backend_options = {"method": "stabilizer"}
 
-    def run(self, num_qubits, state, composite: cliffords.CompositeCliffordGate):
+    def run(self, num_qubits, state, composite: cliffords.CompositeCliffordGate, phases=None):
         circuit = QuantumCircuit(len(state)) 
         #first flip all the bits for which state is 1
         
@@ -22,6 +22,7 @@ class QiskitSimulator(object):
             if b:
                 circuit.x(i)
         projectors = []
+        t_count = 0
         for gate in composite.gates:
             d = gate.data()
             if d[0] == "H":
@@ -33,7 +34,13 @@ class QiskitSimulator(object):
             elif d[0] == "CX":
                 circuit.cx(target_qubit=d[1], control_qubit=d[2])
             elif d[0] == "T":
-                circuit.t(qubit=d[1])
+                if isinstance(phases, type(None)):
+                    circuit.t(qubit=d[1])
+                else:
+                    circuit.rz(phases[t_count],d[1])
+                    
+                t_count += 1
+                
             elif d[0] == "PZ":                
                 projectors.append(d)
             else:

@@ -110,6 +110,16 @@ int StabTable_apply_constraints(StabTable * table, int w, int t);
 
 int StabTable_apply_T_constraints(StabTable * table, int t);
 
+
+/*
+ * It is possible that we end up with a table with some qubits having identity for all stabilisers
+ * These qubits do not change our result at all so we just delete them
+ * updates the table and reuturnes the number of qubits deleted
+ * if magic_qubit_numbers is non-null it is assumed to be a pointer to the first of a block of state->n ints
+ * elements of this array will be moved and deleted in the same way that the magic qubits are
+ * so if each element of the array is unique (for example the ints from 0 to state->n-1) then you can use it to keep track of which magic qubits we deleted
+ */
+int StabTable_delete_all_identity_qubits(StabTable * table, int * magic_qubit_numbers);
 /*
  * create a QCircuit that brings the state represented by this tableau to the state|0><0|^k \otimes I^(n-k) / (2^(n-k))
  * Explicitly k stabilisers on n qubits with the jth being a z on the jth qubit
