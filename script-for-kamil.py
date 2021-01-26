@@ -134,7 +134,7 @@ def circuit(p):
             t = 60
             m = np.power(2, beta*effectiveT/2)
             
-            optimize_prob, optimize_cost = estimate2.optimize_with_phases(epsTot, deltaTot, 40, measured_qubits, r, log_v, m, CH, AG, phases, seed=random.randrange(0,34534), threads=12)
+            estimate2.optimize_with_phases(epsTot, deltaTot, 40, measured_qubits, r, log_v, m, CH, AG, phases, seed=random.randrange(0,34534), threads=12)
         
         
 
@@ -148,6 +148,7 @@ if __name__ == "__main__":
     print(p)
     print("-----------------")
     circuit(p)
+    print("Done!!!")
 
     
 
