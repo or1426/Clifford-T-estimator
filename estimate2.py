@@ -175,7 +175,7 @@ def eps_at_particular_eta(p, deltaTarg, tau, m, eta, t, r, precision):
     else:
         return s_max_eps_value, int(np.ceil(s_max))
     
-def epsStar(p, deltaTot, tau, m, t, r, eta_prec=1e-7, deriv_prec=0.2, eps_prec=1e-15):
+def epsStar(p, deltaTot, tau, m, t, r, eta_prec=1e-10, deriv_prec=0.1, eps_prec=1e-15):
     #start with an initial guess for eta in the middle of the interval
     eta = 0.5
 
@@ -295,11 +295,12 @@ def optimize_with_phases(epsTot, deltaTot, t, measured_qubits, r, log_v, m, CH, 
     pStar = 1
     exitCondition = False
     k = 0
-    s = np.ceil(-2*np.power(np.sqrt(m) + 1, 2)*np.log(deltaTot/(2*np.exp(2)))/epsTot)
+    s = np.ceil(-2*np.power(m + 1, 2)*np.log(deltaTot/(2*np.exp(2)))/epsTot)
     L = 1
     tauZero = s*t*t*(t-r) + s*L*r*r*r
     K = 0
     #print(tauZero)
+    start = time.monotonic()
     while not exitCondition:
         k += 1
         dtime = time.monotonic()
@@ -323,7 +324,7 @@ def optimize_with_phases(epsTot, deltaTot, t, measured_qubits, r, log_v, m, CH, 
         totalL = int(np.ceil(LPlus + LMin(6*deltaTot/np.power(np.pi*k,2), eta)))
         #print(eta, s, totalL, LPlus, LMin(6*deltaTot/np.power(np.pi*k,2), eta), measured_qubits, log_v, r)
         pHat = None
-        if totalL >= 10:
+        if totalL >= threads:
             #def run_estimate_algorithm(seed):
             #    v1 = cPSCS.estimate_algorithm(int(round(s)), totalL, measured_qubits, log_v, r, seed, CH, AG).real
             #    return v1
@@ -340,45 +341,143 @@ def optimize_with_phases(epsTot, deltaTot, t, measured_qubits, r, log_v, m, CH, 
         
         pStar = max(0, min(1, pStar, pHat + eStar))
         estimate_time = time.monotonic() - dtime
+
         print(k, pStar, pHat, eStar, epsTot, s, totalL, LPlus, eta, 6*deltaTot/np.power(np.pi*k,2), optimize_time, estimate_time)
-    return pStar, K
+    end = time.monotonic()
+    return pStar, K, k, (start-end)
 
 
 def hackedOptimise(p, m, epsTot, deltaTot, t, r, delta_UB, K_UUB):
     exitCondition = False
     #k = 0
-    s = np.ceil(-2*np.power(np.sqrt(m) + 1, 2)*np.log(deltaTot/(2*np.exp(2)))/epsTot)
+    s = np.ceil(-2*np.power(m + 1, 2)*np.log(deltaTot/(2*np.exp(2)))/epsTot)
     L = 1
     tauZero = s*t*t*(t-r) + s*L*r*r*r
+
     k = 0
-    #K = 0
+    K = 0
     pStar = 1
     #print(tauZero*np.power(2,k))
     #print(m, epsTot, deltaTot, t, r, delta_UB, K_UUB)
+    #print("k pStar pHat eStar epsTot s totalL LPlus eta 6*deltaTot/np.power(np.pi*k2) LMin(6*deltaTot/np.power(np.pi*k2) eta) LMin(delta_UB/K_UUB eta_tilde)")
     while not exitCondition:
         k += 1
         eStar, eta, s, LPlus = epsStar(pStar, 6*deltaTot/np.power(np.pi*k,2), np.power(2,k)*tauZero, m,t,r)
         #print(p, eStar, eta,s,LPlus, LMin(6*deltaTot/np.power(np.pi*k,2), eta))
-        #K += s*t*t*(t-r) + s*(LPlus + LMin(6*deltaTot/np.power(np.pi*k,2), eta))*r*r*r
+        K += s*t*t*(t-r) + s*(LPlus + LMin(6*deltaTot/np.power(np.pi*k,2), eta))*r*r*r
         if eStar < epsTot:
             exitCondition = True
         totalL = int(round(LPlus + LMin(6*deltaTot/np.power(np.pi*k,2), eta)))
         #print(eta, s, totalL, LPlus, LMin(6*deltaTot/np.power(np.pi*k,2), eta), measured_qubits, log_v, r)
 
         min_eps_prime = float("inf")
+        eta_tilde_best = None
         for eta_tilde in np.linspace(1/100, 1-1/100, 100):
             if LPlus + LMin(6*deltaTot/np.power(np.pi*k,2), eta) - LMin(delta_UB/K_UUB, eta_tilde) >= 1:
-                val = epsPrime(p, delta_UB/K_UUB, eta, s, LPlus + LMin(6*deltaTot/np.power(np.pi*k,2), eta) - LMin(delta_UB/K_UUB, eta_tilde), m, precision=1e-15)
+                val = epsPrime(p, delta_UB/K_UUB, eta, s, np.ceil(LPlus + LMin(6*deltaTot/np.power(np.pi*k,2), eta) - LMin(delta_UB/K_UUB, eta_tilde)), m, precision=1e-15)
                 if val < min_eps_prime:
                     min_eps_prime = val
+                    eta_tilde_best = eta_tilde
         pHat = p + min_eps_prime
         
         pStar = max(0, min(1, pStar, pHat + eStar))
-        #print("k pStar pHat eStar epsTot s totalL LPlus eta 6*deltaTot/np.power(np.pi*k2) LMin(6*deltaTot/np.power(np.pi*k2) eta) LMin(delta_UB/K_UUB eta_tilde)")
-        #print(k, pStar, pHat, eStar, epsTot, s, totalL, LPlus, eta, 6*deltaTot/np.power(np.pi*k,2), LMin(6*deltaTot/np.power(np.pi*k,2), eta), LMin(delta_UB/K_UUB, eta_tilde))
-    #print(p, K)
-    return p, k, (tauZero*(2**(k+1)))
+        
+        #print(k, pStar, pHat, eStar, epsTot, s, totalL, LPlus, eta, 6*deltaTot/np.power(np.pi*k,2), LMin(6*deltaTot/np.power(np.pi*k,2), eta), LMin(delta_UB/K_UUB, eta_tilde_best))
+    #print(p, k)
+    return p,(tauZero*(2**(k+1))), k
+
+
+
+def clifT_eps1(del1,t,p,s):
+    #computes the effective epsilon (eps1) error in |lambda-p| for the given
+    #inputs.
+    g=np.log2(4-2*np.sqrt(2));
+    f1=2*np.power(2,(g*t/2)+p)
+    f2=np.log(2*np.exp(2)/del1);
+    return np.power((np.sqrt(f1*f2/s)+np.sqrt(p)),2)-p
+
+
+
+def clifT_eps2(del2,L):
+    #computes the effective epsilon tilde (eps2) reletive error |p_hat/lambda-1| for the given
+    #inputs.
+    return np.sqrt(-np.log(del2)/L)
+
+
+
+def fake_child_alg(p,t,s,L):
+    del_div=1e6#%this decides the granularity of the sampling of del1,del2 in [0,1]
+    #%set probs for skewed/unskewed sampling of lambda and p_hat
+    prob_eps1_over=0.5# %@0, always sets lambda=p-|eps1|; @1, always sets lambda=p+|eps1|
+    prob_eps2_over=0.5# %@0, always sets p_hat=(1-|eps2|)lambda; @1, always sets p_hat=(1+|eps2|)lambda
+    r= np.random(6)
+    #%decides if lambda will be over or underestimate of p
+    if r[5]<prob_eps1_over:
+        g1=0
+    else:
+        g1=1
+    K1=ceil(del_div*r(1)) #decides magnitude of lambda error from p
+    K2=ceil(del_div*r(2)) #decides magnitude of p_hat error from lambda
+    del1_p=K1/del_div
+    del1_m=(K1-1)/del_div
+    del2_p=K2/del_div
+    del2_m=(K2-1)/del_div
+    eps1_m=clifT_eps1(del1_m,t,secret_p,s)
+    eps1_p=clifT_eps1(del1_p,t,secret_p,s)
+    d1=eps1_p-eps1_m
+    abs_eps1=eps1_m+d1*r(3)
+    l=secret_p
+    if g1 == 0:
+        l += abs_eps1
+    else:
+        l -= abs_eps1
+    eps2_m=clifT_eps2(del2_m,L)
+    eps2_p=clifT_eps2(del2_p,L)
+    d2=eps2_p-eps2_m
+    abs_eps2=eps2_m+d2*r(4)
+    return (1+np.power((-1), g2)*abs_eps2)*l
     
+
+def fakeOptimise(p, m, epsTot, deltaTot, t, r, delta_UB, K_UUB):
+    exitCondition = False
+    #k = 0
+    s = np.ceil(-2*np.power(m + 1, 2)*np.log(deltaTot/(2*np.exp(2)))/epsTot)
+    L = 1
+    tauZero = s*t*t*(t-r) + s*L*r*r*r
+
+    k = 0
+    K = 0
+    pStar = 1
+    #print(tauZero*np.power(2,k))
+    #print(m, epsTot, deltaTot, t, r, delta_UB, K_UUB)
+    #print("k pStar pHat eStar epsTot s totalL LPlus eta 6*deltaTot/np.power(np.pi*k2) LMin(6*deltaTot/np.power(np.pi*k2) eta) LMin(delta_UB/K_UUB eta_tilde)")
+    
+    while not exitCondition:
+        k += 1
+        eStar, eta, s, LPlus = epsStar(pStar, 6*deltaTot/np.power(np.pi*k,2), np.power(2,k)*tauZero, m,t,r)
+        #print(p, eStar, eta,s,LPlus, LMin(6*deltaTot/np.power(np.pi*k,2), eta))
+        K += s*t*t*(t-r) + s*(LPlus + LMin(6*deltaTot/np.power(np.pi*k,2), eta))*r*r*r
+        if eStar < epsTot:
+            exitCondition = True
+        totalL = int(round(LPlus + LMin(6*deltaTot/np.power(np.pi*k,2), eta)))
+        #print(eta, s, totalL, LPlus, LMin(6*deltaTot/np.power(np.pi*k,2), eta), measured_qubits, log_v, r)
+
+        min_eps_prime = float("inf")
+        eta_tilde_best = None
+        for eta_tilde in np.linspace(1/100, 1-1/100, 100):
+            if LPlus + LMin(6*deltaTot/np.power(np.pi*k,2), eta) - LMin(delta_UB/K_UUB, eta_tilde) >= 1:
+                val = epsPrime(p, delta_UB/K_UUB, eta, s, np.ceil(LPlus + LMin(6*deltaTot/np.power(np.pi*k,2), eta) - LMin(delta_UB/K_UUB, eta_tilde)), m, precision=1e-15)
+                if val < min_eps_prime:
+                    min_eps_prime = val
+                    eta_tilde_best = eta_tilde
+        pHat = p + min_eps_prime
+        
+        pStar = max(0, min(1, pStar, pHat + eStar))
+
+        #print(k, pStar, pHat, eStar, epsTot, s, totalL, LPlus, eta, 6*deltaTot/np.power(np.pi*k,2), LMin(6*deltaTot/np.power(np.pi*k,2), eta), LMin(delta_UB/K_UUB, eta_tilde_best))
+    #print(p, k)
+    return p,(tauZero*(2**(k+1))), k
+
     
 
     
