@@ -4138,21 +4138,21 @@ static PyMethodDef myMethods[] = {
 };
 
 // Our Module Definition struct
-static struct PyModuleDef cPSCS = {
+static struct PyModuleDef clifford_t_estim = {
     PyModuleDef_HEAD_INIT,
-    "cPSCS",
-    "Interface with c PSCS code",
+    "clifford_t_estim",
+    "Interface with c Cliffor+T estimation code",
     -1,
     myMethods
 };
 
 // Initializes our module using our above struct
-PyMODINIT_FUNC PyInit_cPSCS(void)
+PyMODINIT_FUNC PyInit_clifford_t_estim(void)
 {
     import_array();
     //double x = 5.0;
     //double y = gsl_sf_bessel_J0 (x);
     //printf ("J0(%g) = %.18e\n", x, y);
     //printf("Hello!\n");
-    return PyModule_Create(&cPSCS);
+    return PyModule_Create(&clifford_t_estim);
 }
