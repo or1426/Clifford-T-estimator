@@ -17,8 +17,8 @@ import sys
 #import qiskit
 from matplotlib import pyplot as plt
 import cPSCS
+
 import estimate
-import estimate2
 from multiprocessing import Pool
 
 
@@ -811,7 +811,7 @@ if __name__ == "__main__":
 
             beta = np.log2(4. - 2.*np.sqrt(2.));
             m = np.power(2, beta*final_t/2)
-            p = estimate2.optimize(eps, delta, t, measured_qubits, r, log_v, m, CH, AG)
+            p = estimate.optimize(eps, delta, t, measured_qubits, r, log_v, m, CH, AG)
             print(p)
 
 
