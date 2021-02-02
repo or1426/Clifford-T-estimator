@@ -312,7 +312,7 @@ def estimate(epsTot, deltaTot, t, measured_qubits, r, v, m, CH, AG, seed=None, t
 
     return pHat, eStar
 
-def estimate_with_phases(epsTot, deltaTot, t, measured_qubits, r, v, m, CH, AG, phases, seed=None, threads=10):
+def estimate_with_phases(epsTot, deltaTot, t, measured_qubits, r, v, m, CH, AG, phases, seed=None, threads=10, print_round_by_round=False):
     if seed != None:
         random.seed(seed)
     
@@ -326,8 +326,9 @@ def estimate_with_phases(epsTot, deltaTot, t, measured_qubits, r, v, m, CH, AG, 
     tauZero = s*t*t*(t-r) + s*L*r*r*r
     K = 0
     #print(tauZero)
-    
+    print("k pStar pHat eStar epsTot s totalL LPlus eta delta_round overhead_time raw_estim_time")
     while not exitCondition:
+        overhead_start = time.monotonic()
         k += 1
         eStar, eta, s, LPlus = epsStar(pStar, 6*deltaTot/np.power(np.pi*k,2), np.power(2,k)*tauZero, m,t,r)
         K += s*t*t*(t-r) + s*(LPlus + LMin(6*deltaTot/np.power(np.pi*k,2), eta))*r*r*r
@@ -339,6 +340,8 @@ def estimate_with_phases(epsTot, deltaTot, t, measured_qubits, r, v, m, CH, AG, 
         
         totalL = int(np.ceil(LPlus + LMin(6*deltaTot/np.power(np.pi*k,2), eta)))
         pHat = None
+        overhead_time = time.monotonic() - overhead_start
+        raw_estim_start = time.monotonic()
         if totalL >= threads:
             #def run_estimate_algorithm(seed):
             #    v1 = cPSCS.estimate_algorithm(int(round(s)), totalL, measured_qubits, log_v, r, seed, CH, AG).real
@@ -353,9 +356,10 @@ def estimate_with_phases(epsTot, deltaTot, t, measured_qubits, r, v, m, CH, AG, 
                 
         else:
             pHat = clifford_t_estim.estimate_algorithm_with_arbitrary_phases(int(round(s)), totalL, measured_qubits, v, r, random.randrange(1,10000), CH, AG, phases).real
-        
+        raw_estim_time = time.monotonic() - raw_estim_start
         pStar = max(0, min(1, pStar, pHat + eStar))
-
+        if print_round_by_round:
+            print(k, pStar, pHat, eStar, epsTot, s, totalL, LPlus, eta, 6*deltaTot/np.power(np.pi*k,2), overhead_time, raw_estim_time)
 
     return pHat, eStar
 
