@@ -491,3 +491,28 @@ def z2DoubleExponentialSum2(M, L):
 
         
             
+def convert_circuit_to_numpy_arrays(circuit):
+    gateArray = np.zeros(len(circuit.gates), dtype=np.uint8)
+    controlArray = np.zeros(len(circuit.gates), dtype=np.uint)
+    targetArray = np.zeros(len(circuit.gates), dtype=np.uint)
+    #qkcirc = qiskit.QuantumCircuit(qubits)
+    for j, gate in enumerate(circuit.gates):
+        if isinstance(gate, gates.cliffords.CXGate):
+            gateArray[j] = 88 #X
+            controlArray[j] = gate.control
+            targetArray[j] = gate.target
+        elif isinstance(gate, gates.cliffords.CZGate):
+            gateArray[j] = 90 #Z
+            controlArray[j] = gate.control
+            targetArray[j] = gate.target
+        elif isinstance(gate, gates.cliffords.SGate):
+            gateArray[j] = 115 #s
+            targetArray[j] = gate.target
+        elif isinstance(gate, gates.cliffords.HGate):
+            gateArray[j] = 104 #h
+            targetArray[j] = gate.target
+        elif isinstance(gate, gates.TGate):
+            gateArray[j] = 116 # t
+            targetArray[j] = gate.target
+
+    return gateArray, controlArray, targetArray

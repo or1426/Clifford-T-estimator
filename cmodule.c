@@ -2970,7 +2970,7 @@ static PyObject * lhs_rank_info(PyObject* self, PyObject* args){
 
 }
 
-static PyObject * calculate_algorithm(PyObject* self, PyObject* args){
+static PyObject * compute_algorithm(PyObject* self, PyObject* args){
     PyArrayObject * gates;
     PyArrayObject * controls;
     PyArrayObject * targets;
@@ -3001,6 +3001,7 @@ static PyObject * calculate_algorithm(PyObject* self, PyObject* args){
             t += 1;
         }
     }
+
     //printf("\n");
     //now we do the stabiliser evolution
     //to compute W
@@ -3053,6 +3054,7 @@ static PyObject * calculate_algorithm(PyObject* self, PyObject* args){
     // at this point we should just be left with t qubits
     int q_to_delete = state->n - t;
     int new_size = t;
+
     for(int s = 0; s < state->k; s++){
         for(int q = q_to_delete; q < state->n; q++){
             state->table[s][q-q_to_delete] = state->table[s][q];
@@ -3066,7 +3068,7 @@ static PyObject * calculate_algorithm(PyObject* self, PyObject* args){
     
     int d = state->k;
     int r = state->n - state->k;
-    
+
     int delta_t = StabTable_delete_all_identity_qubits(state, NULL);
     
     int delta_d = StabTable_apply_T_constraints(state,t);
@@ -3881,6 +3883,167 @@ static PyObject * estimate_algorithm(PyObject* self, PyObject* args){
     return PyComplex_FromDoubles(creal(acc), cimag(acc));       					   
 }
 
+static PyObject * estimate_algorithm_r_equals_0(PyObject* self, PyObject* args){
+    int magic_samples, log_v, seed;
+    PyObject * CHTuple;
+    PyObject * AGTuple;
+	
+    if (!PyArg_ParseTuple(args, "iiiO!O!", &magic_samples,  &log_v, &seed,
+			  &PyTuple_Type, &CHTuple,
+			  &PyTuple_Type, &AGTuple
+            )){
+        return NULL;
+    }
+    srand(seed);
+
+    CHForm * chState = python_tuple_to_CHForm(CHTuple);
+    StabTable * agState = python_tuple_to_StabTable(AGTuple);
+
+    uint_bitarray_t magic_mask = 0;
+
+    for(int i = 0; i < agState->n; i++){
+        magic_mask |= (ONE<<i);
+    }
+    //printf("b\n");
+    uint_bitarray_t * ys = calloc(magic_samples, sizeof(uint_bitarray_t));
+    for(int i = 0; i < magic_samples; i++){
+        ys[i] = bitarray_rand() & magic_mask;
+    }
+
+    //we project onto 0 and throw away the first t-r qubits
+    //leaving us with an r qubit state
+    uint_bitarray_t bitA = 0;
+    uint_bitarray_t bitMask = 0;
+    for(int i = 0; i < chState->n; i++){
+        bitMask |= (ONE << i);
+    }
+    double complex alpha = (1. - I*(sqrt(2.) - 1.))/2.;
+    double beta = log2(4. - 2.*sqrt(2.));
+    double complex alpha_phase = alpha / cabs(alpha);
+    double complex alpha_c_phase = conj(alpha_phase);
+
+    double complex acc = 0;
+    for(int i = 0; i < magic_samples; i++){
+        //printf("%d\n", i);
+        //generate our state
+        CHForm copy = copy_CHForm(chState);
+
+        for(int bit = 0; bit < chState->n; bit++){
+            if((ys[i] >> bit) & ONE){
+                //apply W S^3_bit W^\dagger to chState
+                uint_bitarray_t * z_mat = calloc(chState->n, sizeof(uint_bitarray_t));
+                uint_bitarray_t * x_mat = calloc(chState->n, sizeof(uint_bitarray_t));
+
+                uint_bitarray_t mask = (uint_bitarray_t)0;
+                uint_bitarray_t t_mask = (uint_bitarray_t)0;
+
+                unsigned int g = 2*agState->phases[bit] ;
+                for(int j = 0; j < chState->n; j++){
+                    if(agState->table[bit][j]){
+                        x_mat[j] = copy.F[j];
+                        z_mat[j] = copy.M[j];
+                        mask |= (ONE << j);
+                    }
+                    if(agState->table[bit][j+agState->n]){
+                        z_mat[j] ^= copy.G[j];
+                    }
+                    t_mask |= (ONE << j);
+                    //if x and z are both 1 we get a factor of i because iXZ == Y
+                    if((agState->table[bit][j] == 1) && (agState->table[bit][j+agState->n] == 1)){
+                        g += 1;
+                    }
+
+                }
+                g += popcount(copy.g1 & mask) + 2*popcount(copy.g2 & mask);
+                g += 2*sort_pauli_string(chState->n, x_mat, z_mat, mask);
+
+                uint_bitarray_t u = 0u; // u_m is exponent of X_m
+                uint_bitarray_t h = 0u; // h_m is exponent of Z_m
+
+                for(int k = 0; k < chState->n; k++){
+                    if(agState->table[bit][k]){
+                        u ^= (copy.F[k] & t_mask);
+                        h ^= (copy.M[k] & t_mask);
+                    }
+                    if(agState->table[bit][k+agState->n]){
+                        h ^= (copy.G[k] & t_mask);
+                    }
+                }
+                //at this point the state we want is w U_c [I +  i^g \prod_m  Z_m^{h_m}X_m^{u_m}] U_H |s>
+                //we need to  commute the product through U_H
+                //and then desuperpositionise
+                //we pull the same trick again
+                // (\prod_m X_m^{u_m}Z_m^{h_m}  ) U_H = U_H (U_H^\dagger (\prod_m Z_m^{h_m}X_m^{u_m}) U_H)
+                //n.b. Hadamard is self-adjoint
+                //what happens - if V_k is zero then nothing happens
+                //if V_k is 1 then we swap X and Z
+                //if V_k is 1 and X and Z are both 1 we get a minus sign
+
+                uint_bitarray_t u2 = (u & (~copy.v)) ^ (h & (copy.v));
+                uint_bitarray_t h2 = (h & (~copy.v)) ^ (u & (copy.v));
+                g += 2*parity(u & h & copy.v & t_mask);
+
+
+                //at this point the state we want is w U_c [I +  i^g  U_H  \prod_m  Z_m^{h2_m} X_m^{u2_m}] |s>
+                //we apply the paulis to |s>
+                //every x flips a bit of s
+                //every time a z hits a |1> we get a -1
+                //xs happen first
+
+                uint_bitarray_t y = (copy.s ^ u2) & t_mask;
+                g += 2*parity(y & h2 & t_mask);
+                g += 1; //an i appears in the expression for S^3 in terms of Z and I
+                g %= 4;
+
+                //at this point the state we want is w e^{-i\pi/4}/sqrt{2} U_c U_h( |s> + i^(g) |y>) //extra factors from the formula for S^3
+                if((y & t_mask) == (copy.s & t_mask)){
+                    double complex a = 1.;
+
+                    if(g == 0){
+                        a += 1.;
+                    }
+                    if(g == 1){
+                        a += (1.)*I;
+                    }
+                    if(g == 2){
+                        a += (-1.);
+                    }
+                    if(g == 3){
+                        a += (-1.*I);
+                    }
+
+                    copy.w *= (a*(1 - 1.*I)/2.);
+                }else{
+                    desupersitionise(&copy, y,  g);
+                    copy.w *= (1.-1.*I)/2.;
+                }
+
+                free(x_mat);
+                free(z_mat);
+            }
+        }
+
+        //at this point copy contains our magic sample
+        //we want to project it - no fast norm needed as r = 0
+	int hamming_weight = popcount(ys[i]);
+        double complex prefactor = powl(2., ((beta)*chState->n + log_v)/2.)*cpowl(alpha_phase, chState->n-hamming_weight)*cpowl(alpha_c_phase, hamming_weight);
+	double complex overlap = measurement_overlap(&copy, (uint_bitarray_t)0);
+	
+	acc += prefactor*overlap/magic_samples;
+	    
+	
+	dealocate_state(&copy);
+    }
+
+    double complex prob = creal(acc*conj(acc));
+    free(ys);
+
+    StabTable_free(agState);
+    dealocate_state(chState);
+    free(chState);
+    return PyComplex_FromDoubles(creal(prob), cimag(prob));       					   
+}
+
 
 static PyObject * estimate_algorithm_with_arbitrary_phases(PyObject* self, PyObject* args){
     int magic_samples, equatorial_samples, r, log_v, measured_qubits, seed;
@@ -4128,14 +4291,17 @@ static PyMethodDef myMethods[] = {
     { "main_simulation_algorithm2", main_simulation_algorithm2, METH_VARARGS, "compute a computational basis measurement outcome overlap dumb sampling method"},
     { "v_r_info", v_r_info, METH_VARARGS, "stuff"},
     { "lhs_rank_info", lhs_rank_info, METH_VARARGS, "stuff"},
-    { "calculate_algorithm", calculate_algorithm, METH_VARARGS, "stuff"},
+    { "compute_algorithm", compute_algorithm, METH_VARARGS, "stuff"},
     { "compress_algorithm", compress_algorithm, METH_VARARGS, "Run the compress algorithm precomputation"},
     { "compress_algorithm_no_region_c_constraints", compress_algorithm_no_region_c_constraints, METH_VARARGS, "Run the compress algorithm precomputation without region c constraints"},
     { "compress_algorithm_no_state_output", compress_algorithm_no_state_output, METH_VARARGS, "Run the compress algorithm precomputation without computing AG state and CH state"},
     { "estimate_algorithm", estimate_algorithm, METH_VARARGS, "Run the estimate algorithm"},
+    { "estimate_algorithm_r_equals_0", estimate_algorithm_r_equals_0, METH_VARARGS, "Run the estimate algorithm when r = 0"},
     { "estimate_algorithm_with_arbitrary_phases", estimate_algorithm_with_arbitrary_phases, METH_VARARGS, "Run the estimate algorithm"},
     { NULL, NULL, 0, NULL }
 };
+
+
 
 // Our Module Definition struct
 static struct PyModuleDef clifford_t_estim = {
