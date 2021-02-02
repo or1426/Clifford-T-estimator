@@ -1,5 +1,5 @@
 # Clifford+T estimator
-Clifford+T estimator - estimate a single probability of an n qubit quantum circuit consisting of Clifford gates, arbitrary single-qubit diagonal gates gates and a w qubit computational basis measurement .
+Clifford+T estimator - estimate a single probability of an n qubit quantum circuit consisting of Clifford gates, arbitrary single-qubit diagonal gates gates and a w qubit computational basis measurement.
 
 This is an implementation of the algorithms reported in https://arxiv.org/abs/2101.12223
 
