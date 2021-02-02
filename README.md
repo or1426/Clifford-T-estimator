@@ -31,11 +31,11 @@ In the estimate algorithm code we store [CH-forms](https://quantum-journal.org/p
 
 `typedef uint_fast64_t uint_bitarray_t;`
 
-if you require between 64 and 123 qubits in the estimate code then  you should replace this with the typedef 
+if you require between 64 and 127 qubits in the estimate code then  you should replace this with the typedef 
 
 `typedef unsigned __int128 uint_bitarray_t;`
 
-Doing so will make the code substantially slower. Note that the number of qubits used in the estimate code is upper bounded by the number of non-Clifford gates in your circuit (and may be substantially less in some cases).
+Doing so will make the code substantially (roughly 4 times, based on our testing) slower. Note that the number of qubits used in the estimate code is upper bounded by the number of non-Clifford gates in your circuit (and may be substantially less in some cases).
 
 
 # Basic usage
