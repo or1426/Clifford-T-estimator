@@ -47,4 +47,4 @@ We provide implementations of the following algorithms, as defined in https://ar
 * Estimate - an implementation suitable only for pi/4 T gates
 * Estimate - an implementation suitable for arbitrary phase gates
 
-We also provide some routines to make using these more convenient. 
+We also provide some routines to make using these more convenient. The script `small_example.py` contains examples for basic usage of the Compress, Compute and Estimate algorithms with pi/4 T gates and should run in a few seconds. The script `fixed_probability_circuits.py` contains more advanced usage with some of our convenience routines, and uses the implementation of the Estimate algorithm with arbitrart single qubit diagonal gates.
