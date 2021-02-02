@@ -1,5 +1,5 @@
 # Clifford+T estimator
-Clifford+T estimator - estimate a single probability of an n qubit quantum circuit consisting of Clifford gates, arbitrary single-qubit diagonal gates gates and a w qubit computational basis measurement .
+Clifford+T estimator - estimate a single probability of an n qubit quantum circuit consisting of Clifford gates, arbitrary single-qubit diagonal gates gates and a w qubit computational basis measurement.
 
 This is an implementation of the algorithms reported in https://arxiv.org/abs/2101.12223
 
@@ -8,7 +8,7 @@ This is an implementation of the algorithms reported in https://arxiv.org/abs/21
 You will require
 * python3 
   * numpy
-  * (optional) qiskit
+  * (optional) qiskit - required if you want to test the probabilities our code computes against qiskit predictions
 * GCC (or equivalent C compiler - see notes below)
 
 The setup.py file will compule and link the C code for you. A sufficient setup is (when executed from the directory containing the setup.py file):
@@ -31,11 +31,11 @@ In the estimate algorithm code we store [CH-forms](https://quantum-journal.org/p
 
 `typedef uint_fast64_t uint_bitarray_t;`
 
-if you require between 64 and 123 qubits in the estimate code then  you should replace this with the typedef 
+if you require between 64 and 127 qubits in the estimate code then  you should replace this with the typedef 
 
 `typedef unsigned __int128 uint_bitarray_t;`
 
-Doing so will make the code substantially slower. Note that the number of qubits used in the estimate code is upper bounded by the number of non-Clifford gates in your circuit (and may be substantially less in some cases).
+Doing so will make the code substantially (roughly 4 times, based on our testing) slower. Note that the number of qubits used in the estimate code is upper bounded by the number of non-Clifford gates in your circuit (and may be substantially less in some cases).
 
 
 # Basic usage
@@ -47,4 +47,4 @@ We provide implementations of the following algorithms, as defined in https://ar
 * Estimate - an implementation suitable only for pi/4 T gates
 * Estimate - an implementation suitable for arbitrary phase gates
 
-We also provide some routines to make using these more convenient. 
+We also provide some routines to make using these more convenient. The script `small_example.py` contains examples for basic usage of the Compress, Compute and Estimate algorithms with pi/4 T gates and should run in a few seconds. The script `fixed_probability_circuits.py` contains more advanced usage with some of our convenience routines, and uses the implementation of the Estimate algorithm with arbitrart single qubit diagonal gates.
