@@ -8,7 +8,7 @@ This is an implementation of the algorithms reported in https://arxiv.org/abs/21
 You will require
 * python3 
   * numpy
-  * (optional) qiskit
+  * (optional) qiskit - required if you want to test the probabilities our code computes against qiskit predictions
 * GCC (or equivalent C compiler - see notes below)
 
 The setup.py file will compule and link the C code for you. A sufficient setup is (when executed from the directory containing the setup.py file):
