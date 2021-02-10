@@ -10,481 +10,14 @@
 #include <stdio.h>
 #include <time.h>
 #include "AG.h"
+#include "bitarray.h"
+#include "CH.h"
 
 #include <gsl/gsl_rng.h>
+#include <gsl/gsl_randist.h>
 
 
-
-//typedef unsigned __int128 uint_bitarray_t;
-//#define popcount(x) popcount_unsigned__int128(x)
-//#define parity(x) parity_unsigned__int128(x)
-typedef uint_fast64_t uint_bitarray_t;
-#define popcount(x) popcount_uint_fast64_t(x)
-#define parity(x) parity_uint_fast64_t(x)
-
-//#define popcount(x) popcount_generic(x)
-//#define parity(x) parity_generic(x)
-
-const uint_bitarray_t ONE = 1;
-
-typedef struct CHForm{
-    unsigned int n;
-    uint_bitarray_t * F;
-    uint_bitarray_t * G;
-    uint_bitarray_t * M;
-    uint_bitarray_t g1;
-    uint_bitarray_t g2;
-    uint_bitarray_t s;
-    uint_bitarray_t v;
-
-    double complex w;
-} CHForm;
-
-
-
-static unsigned int parity_generic(uint_bitarray_t x){
-    unsigned int acc = 0;
-    for(int i = 0; i < sizeof(x)*8; i++){
-        acc ^= ((x>>i)&ONE);
-    }
-    return acc & ONE;
-}
-static unsigned int parity_uint_fast64_t(uint_fast64_t x){
-    //uint_fast64_t mask = 0xFFFFFFFFFFFFFFFFu;
-    return __builtin_parityll(x/*&mask*/);
-}
-
-static unsigned int parity_unsigned__int128(unsigned __int128 x){
-    unsigned __int128 mask = ((unsigned __int128)0xFFFFFFFFFFFFFFFFu);
-    return __builtin_parityll((unsigned long long)(x & (mask<<64))) ^ __builtin_parityll((unsigned long long)( (x&mask)  >>64));
-}
-
-static unsigned int popcount_generic(uint_bitarray_t x){
-    unsigned int acc = 0;
-    for(int i = 0; i < sizeof(x)*8; i++){
-        acc += ((unsigned int)((x>>i) & ONE));
-    }
-    return acc;
-}
-static unsigned int popcount_uint_fast64_t(uint_fast64_t x){
-    return __builtin_popcountll(x);
-}
-
-static unsigned int popcount_unsigned__int128(unsigned __int128 x){
-    unsigned __int128 mask = ((unsigned __int128)0xFFFFFFFFFFFFFFFFu);
-    return __builtin_popcountll((unsigned long long)(x & (mask<<64))) + __builtin_popcountll((unsigned long long)( (x&mask)  >>64));
-}
-
-
-uint_bitarray_t bitarray_rand(){
-    uint_bitarray_t val = 0;
-    for(int i = 0; i < sizeof(uint_bitarray_t); i++){
-        val ^= (((uint_bitarray_t)(((unsigned char)rand() % 256))) << (8*i));
-    }
-    return val;
-}
-
-static void printBits(uint_bitarray_t x, int n){
-    uint_bitarray_t ONE = 1;
-    for(int i = 0; i < n; i++){
-        printf("%u", (unsigned int)((x>>i) & ONE));
-    }
-}
-static void print_CHForm(CHForm * state){
-    printf("(%lf, %lf)\n", creal(state->w), cimag(state->w));
-    for(int i = 0; i < state->n; i++){
-        printBits(state->F[i], state->n);printf(" ");
-        printBits(state->G[i], state->n);printf(" ");
-        printBits(state->M[i], state->n);printf(" ");
-        printf("%u %u %u\n",(unsigned int)(((state->g1 >> i) & ONE) + 2*((state->g2 >> i) & ONE)),(unsigned int)((state->v >> i) & ONE),(unsigned int)((state->s >> i) & ONE));//,((state->v >> i) & ONE),);
-    }
-
-}
-
-int init_cb_CHForm(unsigned int n, CHForm * state){
-    state->n = n;
-    if(n > 0){
-        state->F = calloc(n, sizeof(uint_bitarray_t));
-        state->G = calloc(n, sizeof(uint_bitarray_t));
-        state->M = calloc(n, sizeof(uint_bitarray_t));
-    }else{
-        state->F = NULL;
-        state->G = NULL;
-        state->M = NULL;
-    }
-    for(int i = 0; i < state->n; i++){
-        state->F[i] |= (ONE << i);
-        state->G[i] |= (ONE << i);
-    }
-    state->g1 = 0;
-    state->g2 = 0;
-    state->s = 0;
-    state->v = 0;
-    state->w = 1. + 0.*I;
-
-    return 0;
-}
-
-CHForm copy_CHForm(CHForm * state){
-    CHForm copy;
-    copy.n = state->n;
-    if(state->n > 0){
-        copy.F = calloc(state->n, sizeof(uint_bitarray_t));
-        copy.G = calloc(state->n, sizeof(uint_bitarray_t));
-        copy.M = calloc(state->n, sizeof(uint_bitarray_t));
-    }else{
-        copy.F = NULL;
-        copy.G = NULL;
-        copy.M = NULL;
-    }
-    for(int i = 0; i < copy.n; i++){
-        copy.F[i] = state->F[i];
-        copy.G[i] = state->G[i];
-        copy.M[i] = state->M[i];
-    }
-    copy.g1 = state->g1;
-    copy.g2 = state->g2;
-    copy.s = state->s;
-    copy.v = state->v;
-    copy.w = state->w;
-
-    return copy;
-}
-
-int init_zero_CHForm(unsigned int n, CHForm * state){
-    state->n = n;
-    if(n > 0){
-        state->F = calloc(state->n, sizeof(uint_bitarray_t));
-        state->G = calloc(state->n, sizeof(uint_bitarray_t));
-        state->M = calloc(state->n, sizeof(uint_bitarray_t));
-    }else{
-        state->F = NULL;
-        state->G = NULL;
-        state->M = NULL;
-    }
-    state->g1 = 0;
-    state->g2 = 0;
-    state->s = 0;
-    state->v = 0;
-    state->w = 0. + 0.*I;
-
-    return 0;
-}
-
-int dealocate_state(CHForm * state){
-    if(state->F != NULL){
-        free(state->F);
-        state->F = NULL;
-    }
-    if(state->G != NULL){
-        free(state->G);
-        state->G = NULL;
-    }
-    if(state->M != NULL){
-        free(state->M);
-        state->M = NULL;
-    }
-    return 0;
-}
-
-/*
- * GATES
- */
-
-int SR(CHForm * state, unsigned int q){
-    for(int p = 0; p < state->n; p++){
-        state->M[p] ^=  (state->F[p] & (ONE << q));
-        state->g1 ^= ((state->F[p]>>q) & ONE) << p;
-        state->g2 ^= ((state->F[p]>>q) & (state->g1 >>p) & ONE)<<p;
-    }
-
-    return 0;
-}
-
-int SL(CHForm * state, unsigned int q){
-    state->M[q] ^=  state->G[q];
-    state->g1 ^= (ONE <<q);
-    state->g2 ^= (state->g1 & (ONE <<q));
-    return 0;
-}
-
-int CZR(CHForm * state, unsigned int q, unsigned int r){
-    for(int p = 0; p < state->n; p++){
-        state->M[p] ^=  ((state->F[p] >> r) & ONE)<<q;
-        state->M[p] ^=  ((state->F[p] >> q) & ONE)<<r;
-
-        state->g2 ^= (((state->F[p] >> q) & ONE) & ((state->F[p] >> r) & ONE)) << p;
-    }
-    return 0;
-}
-int CZL(CHForm * state, unsigned int q, unsigned int r){
-    state->M[q] ^= state->G[r];
-    state->M[r] ^= state->G[q];
-    return 0;
-}
-
-
-int CXR(CHForm * state, unsigned int q, unsigned int r){
-    for(int p = 0; p < state->n; p++){
-        state->G[p] ^= ((state->G[p]>>r) & ONE)<<q;
-        state->F[p] ^= ((state->F[p]>>q) & ONE)<<r;
-        state->M[p] ^= ((state->M[p]>>r) & ONE)<<q;
-    }
-    return 0;
-}
-
-
-int CXL(CHForm * state, unsigned int q, unsigned int r){
-
-    state->g2 ^= ((state->g1>>r) & (state->g1>>q) & ONE) <<q;
-    state->g1 ^= (((state->g1 >> r) & ONE)<<q);
-    state->g2 ^= (((state->g2 >> r) & ONE)<<q);
-
-    for(int p = 0; p < state->n; p++){
-        state->g2 ^= ((state->M[q]>>p) & (state->F[r]>>p) & ONE) << q;
-    }
-
-    state->G[r] ^= state->G[q];
-    state->F[q] ^= state->F[r];
-    state->M[q] ^= state->M[r];
-
-    return 0;
-}
-int SWAPR(CHForm * state, unsigned int q, unsigned int r){
-    for(int p = 0; p < state->n; p++){
-        state->G[p] ^= ((state->G[p]>>r) & ONE)<<q;
-        state->F[p] ^= ((state->F[p]>>q) & ONE)<<r;
-        state->M[p] ^= ((state->M[p]>>r) & ONE)<<q;
-
-        state->G[p] ^= ((state->G[p]>>q) & ONE)<<r;
-        state->F[p] ^= ((state->F[p]>>r) & ONE)<<q;
-        state->M[p] ^= ((state->M[p]>>q) & ONE)<<r;
-
-        state->G[p] ^= ((state->G[p]>>r) & ONE)<<q;
-        state->F[p] ^= ((state->F[p]>>q) & ONE)<<r;
-        state->M[p] ^= ((state->M[p]>>r) & ONE)<<q;
-    }
-    return 0;
-}
-
-
-int XL(CHForm * state, unsigned int p){
-    //note that X is not C-type so we multiply an X gate onto the whole state not just U_C
-    //for this reason XR doesn't make any sense
-    //so we only have XL
-    //If necessary we could think of an X acting from the right on U_C as an X acting from the left on U_H |s>
-
-    int count = 0;
-    for(int j =0; j < state->n; j++){
-        //first hit |s> with UH^{-1} Z_j^{M_{p,j}} UH
-        if((state->M[p] >> j) & ONE){
-            if((state->v >> j) & ONE){
-                state->s ^= (ONE << j);
-            }else if((state->s >> j) & ONE){
-                count += 1;
-            }
-        }
-        //now hit |s> with UH^{-1} X_j^{F_{p,j}} UH
-        if((state->F[p] >> j) & ONE){
-            if((state->v >> j) & ONE){
-                if((state->s >> j) & ONE){
-                    count += 1;
-                }
-            }else{
-                state->s ^= (ONE << j);
-            }
-        }
-    }
-
-    state->w *= (((count + ((state->g2>>p)&ONE)) %2) ? -1.:1.);
-    state->w *= (((state->g1>>p) & ONE)  ? I:1.);
-    return 0;
-}
-
-
-enum gate{
-    cx,
-    cz,
-    s,
-    h
-};
-
-int desupersitionise(CHForm * state, uint_bitarray_t u,  unsigned int d){
-
-    uint_bitarray_t sNeqU = state->s ^ u;
-    if(sNeqU == 0){
-        return -1;
-    }
-
-    uint_bitarray_t v0 = (~state->v) & sNeqU;
-    uint_bitarray_t v1 = (state->v) & sNeqU;
-    int q = -1;
-    if(v0 != 0){
-        for(int i = 0; i< state->n; i++){
-            if( (v0 >> i) & ONE){
-                if(q < 0){
-                    q = i;
-                }else{
-                    CXR(state, q, i);
-                }
-            }
-        }
-        for(int i = 0; i< state->n; i++){
-            if( ((v1 >> i) & ONE)){
-                CZR(state, q, i);
-            }
-
-        }
-
-    }else{
-        for(int i = 0; i < state->n; i++){
-            if( (v1 >> i) & ONE){
-                if(q < 0){
-                    q = i;
-                }else{
-                    CXR(state, i, q);
-                }
-            }
-        }
-    }
-
-    uint_bitarray_t y, z;
-    if((state->s >> q) & ONE){
-        y = u;
-        y ^= (ONE << q);
-        z = u;
-    }else{
-        y = state->s;
-        z = state->s;
-        z ^= (ONE << q);
-    }
-    unsigned int w = 0;
-    unsigned int k = d;
-
-    if((y>>q) & ONE){
-        w = d;
-        k = (4u-d) % 4u;
-    }
-
-    unsigned int a, b,c;
-
-    double complex phase = sqrt(2.);
-    for(unsigned int i = 0; i < w; i++){
-        phase *= I;
-    }
-
-    if( (~(state->v >> q)) & ONE){ //v[q] == 0
-        b = 1;
-        if(k==0){
-            a = 0;
-            c = 0;
-        }else if(k==1){
-            a = 1;
-            c = 0;
-        }else if(k==2){
-            a = 0;
-            c = 1;
-        }else /*(k==3)*/{
-            a = 1;
-            c = 1;
-        }
-    }else{//v[q] == 1
-        if(k==0){
-            a = 0;
-            b = 0;
-            c = 0;
-        }else if(k==1){
-            a = 1;
-            b = 1;
-            c = 1;
-            phase *= (1 + I)/sqrt(2);
-        }else if(k==2){
-            a = 0;
-            b = 0;
-            c = 1;
-        }else/*(k==3)*/{
-            a = 1;
-            b = 1;
-            c = 0;
-            phase *= (1 - I)/sqrt(2);
-        }
-    }
-
-    state->s = y;
-    state->s ^=  (state->s & (ONE << q)) ^ ((c & ONE) << q);
-    state->v ^=  (state->v & (ONE << q)) ^ ((b & ONE) << q);
-    state->w *= phase;
-    if(a){
-        SR(state, q);
-    }
-
-    return 0;
-}
-
-int HL(CHForm * state, unsigned int q){
-    uint_bitarray_t t = state->s ^ (state->G[q] & state->v);
-    uint_bitarray_t u = state->s ^ ((state->F[q] & (~state->v)) ^ (state->M[q] & state->v));
-    uint_bitarray_t alpha = 0;
-    uint_bitarray_t beta = 0;
-    for(int i=0; i < state->n; i++){
-        alpha ^= ((state->G[q] & (~state->v) & state->s)) >>i;
-        beta ^= ((state->M[q] & (~state->v) & state->s) ^ (state->F[q] & state->v & (state->M[q] ^ state->s))) >>i;
-
-    }
-    alpha &= ONE;
-    beta &= ONE;
-    state->s = t;
-    if(t == u){
-        double complex a = 1;
-        if(alpha){
-            a *= -1;
-        }
-        double complex b = 1;
-        if(beta ^ ((state->g2 >> q) & ONE) ){
-            b *= -1;
-        }
-        if((state->g1 >> q) & ONE ){
-            b *= I;
-        }
-        state->w *=  (a + b)/sqrt(2.);
-    }else{
-        unsigned int d = (((state->g1>>q) &ONE) + 2*((state->g2>>q) & ONE)  + 2*(alpha+beta)) % 4u;
-        desupersitionise(state, u, d);
-        if(alpha){
-            state->w *= -1;
-        }
-        state->w /= sqrt(2);
-    }
-
-    return 0;
-}
-
-
-static CHForm * compute_CHForm(int n, PyArrayObject * F, PyArrayObject *G, PyArrayObject *M, PyArrayObject *g, PyArrayObject *v,PyArrayObject *s, Py_complex w)
-{
-    CHForm * state = calloc(1, sizeof(CHForm));
-
-    init_zero_CHForm(n, state);
-
-    for(int i = 0; i < n; i++){
-        for(int j = 0; j < n; j++){
-            state->F[i] |= (((uint_bitarray_t)F->data[i*F->strides[0] + j*F->strides[1]]) & ONE) << j;
-            state->G[i] |= (((uint_bitarray_t)G->data[i*G->strides[0] + j*G->strides[1]]) & ONE) << j;
-            state->M[i] |= (((uint_bitarray_t)M->data[i*M->strides[0] + j*M->strides[1]]) & ONE) << j;
-        }
-
-        state->g1 |= (((uint_bitarray_t)g->data[i*g->strides[0]]) & ONE) << i;
-        state->g2 |= ((((uint_bitarray_t)g->data[i*g->strides[0]]) >> 1u) & ONE) << i;
-
-        state->v |= (((uint_bitarray_t)v->data[i*v->strides[0]]) & ONE) << i;
-        state->s |= (((uint_bitarray_t)s->data[i*s->strides[0]]) & ONE) << i;
-    }
-    state->w = w.real + I*w.imag;
-    return state;
-}
-
-
-static CHForm * python_tuple_to_CHForm(PyObject * tuple){
+CHForm * python_tuple_to_CHForm(PyObject * tuple){
     PyObject * py_n = PyTuple_GetItem(tuple, 0);
     PyArrayObject * py_F = (PyArrayObject *)PyTuple_GetItem(tuple, 1);
     PyArrayObject * py_G = (PyArrayObject *)PyTuple_GetItem(tuple, 2);
@@ -492,14 +25,31 @@ static CHForm * python_tuple_to_CHForm(PyObject * tuple){
     PyArrayObject * py_g = (PyArrayObject *)PyTuple_GetItem(tuple, 4);
     PyArrayObject * py_v = (PyArrayObject *)PyTuple_GetItem(tuple, 5);
     PyArrayObject * py_s = (PyArrayObject *)PyTuple_GetItem(tuple, 6);
-    PyObject * py_phase = PyTuple_GetItem(tuple, 7);
-
+    PyObject * py_obj_phase = PyTuple_GetItem(tuple, 7);
+    Py_complex py_phase = PyComplex_AsCComplex(py_obj_phase);
     int n = PyLong_AsLong(py_n);
-    return compute_CHForm(n, py_F, py_G, py_M, py_g, py_v, py_s, PyComplex_AsCComplex(py_phase));
-    
+    CHForm * state = calloc(1, sizeof(CHForm));
+
+    init_zero_CHForm(n, state);
+
+    for(int i = 0; i < n; i++){
+        for(int j = 0; j < n; j++){
+            state->F[i] |= (((uint_bitarray_t)py_F->data[i*py_F->strides[0] + j*py_F->strides[1]]) & ONE) << j;
+            state->G[i] |= (((uint_bitarray_t)py_G->data[i*py_G->strides[0] + j*py_G->strides[1]]) & ONE) << j;
+            state->M[i] |= (((uint_bitarray_t)py_M->data[i*py_M->strides[0] + j*py_M->strides[1]]) & ONE) << j;
+        }
+
+        state->g1 |= (((uint_bitarray_t)py_g->data[i*py_g->strides[0]]) & ONE) << i;
+        state->g2 |= ((((uint_bitarray_t)py_g->data[i*py_g->strides[0]]) >> 1u) & ONE) << i;
+
+        state->v |= (((uint_bitarray_t)py_v->data[i*py_v->strides[0]]) & ONE) << i;
+        state->s |= (((uint_bitarray_t)py_s->data[i*py_s->strides[0]]) & ONE) << i;
+    }
+    state->w = py_phase.real + I*py_phase.imag;
+    return state;    
 }
 
-static PyObject * CHForm_to_python_tuple(CHForm * state){    
+PyObject * CHForm_to_python_tuple(CHForm * state){    
     const long int dimensions1[1] = {state->n};
     const long int dimensions2[2] = {state->n, state->n};
 
@@ -528,7 +78,7 @@ static PyObject * CHForm_to_python_tuple(CHForm * state){
     return Py_BuildValue("iOOOOOOD", state->n, F, G, M, g, v, s, &phase);
 }
 
-static CHForm * c_apply_gates_to_basis_state(int n, PyArrayObject * gates, PyArrayObject * controls, PyArrayObject * targets){
+CHForm * c_apply_gates_to_basis_state(int n, PyArrayObject * gates, PyArrayObject * controls, PyArrayObject * targets){
     CHForm * state = calloc(1, sizeof(CHForm));
     init_cb_CHForm(n, state);
     //printf("3\n");
@@ -553,59 +103,24 @@ static CHForm * c_apply_gates_to_basis_state(int n, PyArrayObject * gates, PyArr
     return state;
 }
 
-static PyObject * apply_gates_to_basis_state(PyObject* self, PyObject* args){
-    PyArrayObject * gates;
-    PyArrayObject * controls;
-    PyArrayObject * targets;
-    int n;
-    //printf("1\n");
-    if (!PyArg_ParseTuple(args, "iO!O!O!", &n,
-                          &PyArray_Type, &gates,
-                          &PyArray_Type, &controls,
-                          &PyArray_Type, &targets
-            )){
-        return NULL;
-    }
-
-    CHForm * state =  c_apply_gates_to_basis_state(n, gates, controls, targets);
-    PyObject * tuple = CHForm_to_python_tuple(state);
-    dealocate_state(state);
-    return tuple;
-}
-
-static unsigned int sort_pauli_string(uint n, uint_bitarray_t * x, uint_bitarray_t * z, uint_bitarray_t mask)
-{
-    uint_bitarray_t t = 0;
-    unsigned int sign = 0;
-    for(int i = 0; i < n; i++){
-        if((mask >> i) & ONE){
-            t ^= z[i];
-            sign ^= parity(t & x[i]);
-        }
-    }
-
-    return sign;
-}
-
-/* Given a product of the form appearing in (55) of Bravyi et al
+/* 
+ * Given a product of the form appearing in (55) of Bravyi et al
  * work out the minus sign you get if you pull all the Zs to the left hand side and all the xs to the right
  */
-
-static unsigned int sort_pauli_string2(uint n, uint_bitarray_t * x, uint_bitarray_t * z, uint_bitarray_t mask)
-{
+unsigned int sort_pauli_string(uint n, uint_bitarray_t * x, uint_bitarray_t * z, uint_bitarray_t mask){
     uint_bitarray_t t = 0;
     unsigned int sign = 0;
     for(int i = 0; i < n; i++){
         if((mask >> i) & ONE){
-            sign ^= parity(t & x[i]);
             t ^= z[i];
+            sign ^= parity(t & x[i]);
         }
     }
 
     return sign;
 }
 
-static double complex measurement_overlap(CHForm * state, uint_bitarray_t x){
+double complex measurement_overlap(CHForm * state, uint_bitarray_t x){
     //compute the inner product <x | state>
     //where the bitstring x determines a computational basis state
     uint_fast64_t u = 0;
@@ -651,7 +166,7 @@ static double complex measurement_overlap(CHForm * state, uint_bitarray_t x){
     return phase;
 }
 
-static void apply_z_projector(CHForm * state, int a, int q){
+void apply_z_projector(CHForm * state, int a, int q){
     //apply the projector |a><a| to the qubit q where a is the least significant bit of a
     unsigned int k = a ^ parity(state->G[q] & (~state->v) & state->s);
     uint_bitarray_t t = (state->G[q] & state->v) ^ state->s;
@@ -665,7 +180,7 @@ static void apply_z_projector(CHForm * state, int a, int q){
         }
     }
 }
-static void apply_z_projectors(CHForm * state, uint_bitarray_t a, uint_bitarray_t mask){
+void apply_z_projectors(CHForm * state, uint_bitarray_t a, uint_bitarray_t mask){
     //for each qubit i
     //if mask mask_i == 1
     //apply the projector |a_i><a_i|
@@ -685,7 +200,7 @@ static void apply_z_projectors(CHForm * state, uint_bitarray_t a, uint_bitarray_
     }
 }
 
-static CHForm * postselect_and_reduce(CHForm * state, uint_bitarray_t a, uint_bitarray_t mask){
+CHForm * postselect_and_reduce(CHForm * state, uint_bitarray_t a, uint_bitarray_t mask){
     //handle the case where we're actually doing a full inner product separately
     if(popcount(mask) == state->n){
         state->w = measurement_overlap(state, a);
@@ -871,7 +386,7 @@ static CHForm * postselect_and_reduce(CHForm * state, uint_bitarray_t a, uint_bi
     return state;
 }
 
-static PyObject * apply_gates_to_basis_state_project_and_reduce(PyObject* self, PyObject* args){
+PyObject * apply_gates_to_basis_state_project_and_reduce(PyObject* self, PyObject* args){
     PyArrayObject * gates;
     PyArrayObject * controls;
     PyArrayObject * targets;
@@ -911,6 +426,7 @@ static PyObject * apply_gates_to_basis_state_project_and_reduce(PyObject* self, 
     dealocate_state(state);
     return tuple;
 }
+
 
 //equatorial matrices define equatorial states
 //they are symmetric matrices with binary off diagonal elements
@@ -1557,264 +1073,6 @@ double complex equatorial_inner_product3(CHForm* state, equatorial_matrix_t equa
     return val;    
 }
 
-static PyObject * equatorial_inner_product_tests(PyObject* self, PyObject* args){
-    PyArrayObject * gates;
-    PyArrayObject * controls;
-    PyArrayObject * targets;
-
-    int n, eq_states;
-
-    if (!PyArg_ParseTuple(args, "iiO!O!O!", &n, &eq_states,
-                          &PyArray_Type, &gates,
-                          &PyArray_Type, &controls,
-                          &PyArray_Type, &targets
-            )){
-        return NULL;
-    }
-
-    CHForm state;
-    init_cb_CHForm(n, &state);
-
-    for(int i = 0; i < gates->dimensions[0]; i++){        
-        switch((*(unsigned char *)PyArray_GETPTR1(gates,i))) {
-        case CX:
-            CXL(&state, (*(unsigned int *)PyArray_GETPTR1(controls,i)), (*(unsigned int *)PyArray_GETPTR1(targets,i)));
-            break;
-        case CZ:
-            CZL(&state, (*(unsigned int *)PyArray_GETPTR1(controls,i)), (*(unsigned int *)PyArray_GETPTR1(targets,i)));
-            break;
-        case S:
-            SL(&state, (*(unsigned int *)PyArray_GETPTR1(targets,i)));
-            break;
-        case H:
-            HL(&state, (*(unsigned int *)PyArray_GETPTR1(targets,i)));
-            break;
-        }
-    }
-
-    equatorial_matrix_t * equatorial_matrices = calloc(eq_states, sizeof(equatorial_matrix_t));
-    for(int i = 0; i < eq_states; i++){
-        init_random_equatorial_matrix(&(equatorial_matrices[i]), n);
-    }
-
-    double new_method_time = 0;
-    double old_method_time = 0;
-    double complex v = 0.;
-    for(int i = 0; i < eq_states; i++){
-	//test new method
-	clock_t t = clock();
-	v += equatorial_inner_product3(&state, equatorial_matrices[i]);
-	new_method_time += (clock() - t)/((double)CLOCKS_PER_SEC);
-
-	t = clock();
-	v += equatorial_inner_product(&state, equatorial_matrices[i]);
-	old_method_time += (clock() - t)/((double)CLOCKS_PER_SEC);
-	
-    }
-    
-    for(int i = 0; i < eq_states; i++){
-        dealocate_equatorial_matrix(&(equatorial_matrices[i]));
-    }
-    dealocate_state(&state);
-
-    Py_complex pyv;
-    pyv.real = creal(v);
-    pyv.imag = cimag(v);
-    
-    return Py_BuildValue("ddD", new_method_time/eq_states, old_method_time/eq_states, &pyv);
-	
-}
-
-static PyObject * equatorial_inner_product_wrapper(PyObject* self, PyObject* args){
-    PyArrayObject * gates;
-    PyArrayObject * targets;
-    PyArrayObject * controls;
-    PyArrayObject * equatorial_state_matrix;
-    int n = 0;
-
-    if (!PyArg_ParseTuple(args, "iO!O!O!O!", &n,
-                          &PyArray_Type, &gates,
-                          &PyArray_Type, &controls,
-                          &PyArray_Type, &targets,
-                          &PyArray_Type, &equatorial_state_matrix
-            )){
-        return NULL;
-    }
-
-    CHForm * state =  c_apply_gates_to_basis_state(n, gates, controls, targets);
-    equatorial_matrix_t A;
-    init_zero_equatorial_matrix(&A, n);
-    for(int i = 0; i < n; i++){
-        for(int j = i+1; j < n; j++){
-            A.mat[i] ^= (equatorial_state_matrix->data[i*equatorial_state_matrix->strides[0] + j*equatorial_state_matrix->strides[1]] & ONE) <<j;
-            A.mat[j] ^= ((A.mat[i] >> j) & ONE) << i;
-        }
-        A.d1 ^= (equatorial_state_matrix->data[i*equatorial_state_matrix->strides[0] + i*equatorial_state_matrix->strides[1]] & ONE) << i;
-        A.d2 ^= ((equatorial_state_matrix->data[i*equatorial_state_matrix->strides[0] + i*equatorial_state_matrix->strides[1]] >> 1) & ONE) << i;
-    }
-    double complex prod = equatorial_inner_product(state, A);
-    dealocate_state(state);
-    dealocate_equatorial_matrix(&A);
-    PyObject * phase = (Py_complex*)PyComplex_FromDoubles(creal(prod), cimag(prod));
-    return Py_BuildValue("O", phase);
-
-}
-
-static PyObject * equatorial_inner_product_wrapper2(PyObject* self, PyObject* args){
-    PyArrayObject * F, *G, *M, *g, *v,*s;
-    PyArrayObject * pyA;
-    int n;
-    Py_complex w;
-    if (!PyArg_ParseTuple(args, "iO!O!O!O!O!O!DO!", &n,
-                          &PyArray_Type, &F,
-                          &PyArray_Type, &G,
-                          &PyArray_Type, &M,
-                          &PyArray_Type, &g,
-                          &PyArray_Type, &v,
-                          &PyArray_Type, &s,
-                          &w, &PyArray_Type, &pyA
-            )){
-        return NULL;
-    }
-
-
-    CHForm * state = compute_CHForm(n, F, G, M, g, v, s, w);
-
-    equatorial_matrix_t A;
-    init_zero_equatorial_matrix(&A, n);
-    for(int i = 0; i < n; i++){
-        for(int j = i+1; j < n; j++){
-            A.mat[i] ^= (pyA->data[i*pyA->strides[0] + j*pyA->strides[1]] & ONE) <<j;
-            A.mat[j] ^= ((A.mat[i] >> j) & ONE) << i;
-        }
-        A.d1 ^= (pyA->data[i*pyA->strides[0] + i*pyA->strides[1]] & ONE) << i;
-        A.d2 ^= ((pyA->data[i*pyA->strides[0] + i*pyA->strides[1]] >> 1) & ONE) << i;
-    }
-
-    double complex prod = equatorial_inner_product(state, A);
-    dealocate_state(state);
-    dealocate_equatorial_matrix(&A);
-    PyObject * phase = (Py_complex*)PyComplex_FromDoubles(creal(prod), cimag(prod));
-    return Py_BuildValue("O", phase);
-
-}
-
-static PyObject * measurement_overlap_wrapper(PyObject* self, PyObject* args){
-    PyArrayObject * gates;
-    PyArrayObject * targets;
-    PyArrayObject * controls;
-    PyArrayObject * a;
-    int n = 0;
-
-    if (!PyArg_ParseTuple(args, "iO!O!O!O!", &n,
-                          &PyArray_Type, &gates,
-                          &PyArray_Type, &controls,
-                          &PyArray_Type, &targets,
-                          &PyArray_Type, &a
-            )){
-        return NULL;
-    }
-
-    CHForm * state =  c_apply_gates_to_basis_state(n, gates, controls, targets);
-
-    uint_bitarray_t bitA = 0;
-    for(int i = 0; i < n; i++){
-        if(a->data[i*a->strides[0]] & ONE){
-            bitA |= (ONE << i);
-        }
-    }
-
-    double complex w = measurement_overlap(state, bitA);
-    dealocate_state(state);
-
-    PyObject * phase = (Py_complex*)PyComplex_FromDoubles(creal(w), cimag(w));
-    return Py_BuildValue("O", phase);
-
-}
-
-static PyObject * measurement_overlap_wrapper2(PyObject* self, PyObject* args){
-
-    PyArrayObject * F, *G, *M, *g, *v,*s;
-    PyArrayObject * a;
-    int n;
-    Py_complex w;
-    if (!PyArg_ParseTuple(args, "iO!O!O!O!O!O!DO!", &n,
-                          &PyArray_Type, &F,
-                          &PyArray_Type, &G,
-                          &PyArray_Type, &M,
-                          &PyArray_Type, &g,
-                          &PyArray_Type, &v,
-                          &PyArray_Type, &s,
-                          &w, &PyArray_Type, &a
-            )){
-        return NULL;
-    }
-
-
-    CHForm * state = compute_CHForm(n, F, G, M, g, v, s, w);
-
-    uint_bitarray_t bitA = 0;
-    for(int i = 0; i < n; i++){
-        if(a->data[i*a->strides[0]] & ONE){
-            bitA |= (ONE << i);
-        }
-    }
-
-    double complex w1 = measurement_overlap(state, bitA);
-    dealocate_state(state);
-
-    PyObject * phase = (Py_complex*)PyComplex_FromDoubles(creal(w1), cimag(w1));
-    return Py_BuildValue("O", phase);
-
-}
-
-
-static PyObject * partial_equatorial_inner_product_wrapper(PyObject* self, PyObject* args){
-    PyArrayObject * gates;
-    PyArrayObject * targets;
-    PyArrayObject * controls;
-    PyArrayObject * mask;
-    PyArrayObject * equatorial_state_matrix;
-    int n = 0;
-
-    if (!PyArg_ParseTuple(args, "iO!O!O!O!O!", &n,
-                          &PyArray_Type, &gates,
-                          &PyArray_Type, &controls,
-                          &PyArray_Type, &targets,
-                          &PyArray_Type, &mask,
-                          &PyArray_Type, &equatorial_state_matrix
-            )){
-        return NULL;
-    }
-
-    CHForm * state =  c_apply_gates_to_basis_state(n, gates, controls, targets);
-    uint_bitarray_t bitMask = 0;
-    for(int i = 0; i < n; i++){
-        bitMask |= ((mask->data[i*mask->strides[0]] & ONE) << i);
-    }
-
-    int equatorial_matrix_size = equatorial_state_matrix->dimensions[0];
-    equatorial_matrix_t A;
-
-    init_zero_equatorial_matrix(&A, equatorial_matrix_size);
-
-    for(int i = 0; i < equatorial_matrix_size; i++){
-        for(int j = i+1; j < equatorial_matrix_size; j++){
-            A.mat[i] ^= (equatorial_state_matrix->data[i*equatorial_state_matrix->strides[0] + j*equatorial_state_matrix->strides[1]] & ONE) <<j;
-            A.mat[j] ^= ((A.mat[i] >> j) & ONE) << i;
-        }
-        A.d1 ^= (equatorial_state_matrix->data[i*equatorial_state_matrix->strides[0] + i*equatorial_state_matrix->strides[1]] & ONE) << i;
-        A.d2 ^= ((equatorial_state_matrix->data[i*equatorial_state_matrix->strides[0] + i*equatorial_state_matrix->strides[1]] >> 1) & ONE) << i;
-    }
-
-    partial_equatorial_inner_product(state, A, bitMask);
-
-
-    PyObject * tuple = CHForm_to_python_tuple(state);
-    dealocate_state(state);
-    dealocate_equatorial_matrix(&A);
-    return tuple;
-}
 
 static PyObject * magic_sample_1(PyObject* self, PyObject* args){
 
@@ -3066,14 +2324,14 @@ static PyObject * compute_algorithm(PyObject* self, PyObject* args){
     }
     state->n = new_size;
     
-    int d = state->k;
-    int r = state->n - state->k;
+    //int d = state->k;
+    //int r = state->n - state->k;
 
-    int delta_t = StabTable_delete_all_identity_qubits(state, NULL);
+    StabTable_delete_all_identity_qubits(state, NULL);
     
-    int delta_d = StabTable_apply_T_constraints(state,t);
+    StabTable_apply_T_constraints(state,t);
 
-    int delta_t_prime = StabTable_delete_all_identity_qubits(state, NULL);
+    StabTable_delete_all_identity_qubits(state, NULL);
 
     //printf("final state:\n");
     //StabTable_print(state);
@@ -3222,7 +2480,6 @@ static PyObject * compress_algorithm(PyObject* self, PyObject* args){
     /* printf("0:\n"); */
     /* StabTable_print(state); */
     /* printf("\n"); */
-
     for(int i = 0; i < gates->dimensions[0]; i++){
         //printf("%d, %c, %d, %d\n", i, gates->data[i*gates->strides[0]],controls->data[i*controls->strides[0]], targets->data[i*targets->strides[0]]);
         switch((*(unsigned char *)PyArray_GETPTR1(gates,i))) {
@@ -3910,13 +3167,6 @@ static PyObject * estimate_algorithm_r_equals_0(PyObject* self, PyObject* args){
         ys[i] = bitarray_rand() & magic_mask;
     }
 
-    //we project onto 0 and throw away the first t-r qubits
-    //leaving us with an r qubit state
-    uint_bitarray_t bitA = 0;
-    uint_bitarray_t bitMask = 0;
-    for(int i = 0; i < chState->n; i++){
-        bitMask |= (ONE << i);
-    }
     double complex alpha = (1. - I*(sqrt(2.) - 1.))/2.;
     double beta = log2(4. - 2.*sqrt(2.));
     double complex alpha_phase = alpha / cabs(alpha);
@@ -4099,7 +3349,7 @@ static PyObject * estimate_algorithm_with_arbitrary_phases(PyObject* self, PyObj
     //printf("b\n");
     uint_bitarray_t * ys = calloc(magic_samples, sizeof(uint_bitarray_t));
     for(int i = 0; i < magic_samples; i++){
-        ys[i] = (uint_bitarray_t)0; //bitarray_rand() & magic_mask;
+        ys[i] = (uint_bitarray_t)0;
 	for(int bit = 0; bit < agState->n; bit++){
 	    if(!gsl_ran_bernoulli(RNG, probs[bit])){
 		ys[i] |= (ONE << bit);
@@ -4277,16 +3527,9 @@ static PyObject * estimate_algorithm_with_arbitrary_phases(PyObject* self, PyObj
 
 
 static PyMethodDef myMethods[] = {
-    { "apply_gates_to_basis_state", apply_gates_to_basis_state, METH_VARARGS, "Applies a bunch of gates to an initial computational-basis state"},
     { "apply_gates_to_basis_state_project_and_reduce", apply_gates_to_basis_state_project_and_reduce, METH_VARARGS, "Applies a bunch of gates to an initial computational-basis state, then applies a bunch of z projectors and removes the (now product state) qubits we projected"},
-    { "equatorial_inner_product_wrapper", equatorial_inner_product_wrapper, METH_VARARGS, "perform equatorial inner product"},
-    { "equatorial_inner_product_wrapper2", equatorial_inner_product_wrapper2, METH_VARARGS, "perform equatorial inner product"},
-    { "partial_equatorial_inner_product_wrapper", partial_equatorial_inner_product_wrapper, METH_VARARGS, "perform partial equatorial inner product"},
-    { "equatorial_inner_product_tests", equatorial_inner_product_tests, METH_VARARGS, "equatorial_inner_product_tests"},
     { "magic_sample_1", magic_sample_1, METH_VARARGS, "do the sampling algorithm with magic sampling first"},
     { "magic_sample_2", magic_sample_2, METH_VARARGS, "do the sampling algorithm with fastnorm first"},
-    { "measurement_overlap_wrapper", measurement_overlap_wrapper, METH_VARARGS, "compute a computational basis measurement outcome overlap"},
-    { "measurement_overlap_wrapper2", measurement_overlap_wrapper2, METH_VARARGS, "compute a computational basis measurement outcome overlap"},
     { "main_simulation_algorithm", main_simulation_algorithm, METH_VARARGS, "compute a computational basis measurement outcome overlap"},
     { "main_simulation_algorithm2", main_simulation_algorithm2, METH_VARARGS, "compute a computational basis measurement outcome overlap dumb sampling method"},
     { "v_r_info", v_r_info, METH_VARARGS, "stuff"},
