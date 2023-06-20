@@ -83,6 +83,8 @@ while (alg_1_wins_circuit == None) or (alg_2_wins_circuit == None) or (alg_3_win
 
 print("alg 1 circuit")
 print(alg_1_wins_circuit)
+
+
 print()
 print("alg 2 circuit")
 print(alg_2_wins_circuit)
