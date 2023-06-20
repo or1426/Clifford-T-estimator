@@ -2,7 +2,9 @@
 #include <stdlib.h>
 #include "bitarray.h"
 
+const uint_bitarray_t ZERO = 0;
 const uint_bitarray_t ONE = 1;
+const uint_bitarray_t MAX = -1;
 
 unsigned int parity_generic(uint_bitarray_t x){
     unsigned int acc = 0;

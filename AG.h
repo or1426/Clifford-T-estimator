@@ -2,7 +2,8 @@
 #define AARONSON_GOTTESMAN_H
 
 #include "QCircuit.h"
-
+#include "bitarray.h"
+#include "binary_expression.h"
 #include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -25,6 +26,16 @@ struct StabTable
 
 typedef struct StabTable StabTable;
 
+struct EquivClassDecomp{
+  size_t n_qubits;
+  size_t n_classes;
+  size_t * class_sizes;
+  size_t ** classes;  
+};
+
+typedef struct EquivClassDecomp EquivClassDecomp;
+void EquivClassDecomp_free(EquivClassDecomp * classes);
+void StabTable_pprint_equivalence_classes(EquivClassDecomp * classes);
 
 /*
  * Init a new stabtable in the state |0>^k \otimes I^(n-k) / (2^(n-k))
@@ -40,6 +51,10 @@ StabTable * StabTable_new(int n, int k);
 int StabTable_free(StabTable * table);
 
 void StabTable_print(StabTable * table);
+StabTable * StabTable_copy(StabTable * table);
+void StabTable_pprint_table(StabTable * state, int t);
+
+void StabTable_pprint_row(int n, int t, unsigned char phase, unsigned char * row);
 /*
  * Applies a CX gate controlled on qubit a targetted on qubit b
  * it is assumed a and b are valid qubit numbers (i.e. < n)
@@ -101,6 +116,18 @@ unsigned char StabTable_rowsum2(StabTable * table, unsigned char * row, unsigned
 int StabTable_apply_constraints(StabTable * table, int w, int t);
 
 /*
+  Put it in ZX form on qubit q
+ */
+int StabTable_ZX_form(StabTable * table, int starting_row, int q);
+
+/*
+  Attempt to make a cascading ZX form
+ */
+int StabTable_cascading_ZX_form(StabTable * table, int starting_qubit);
+int StabTable_cascading_ZX_form2(StabTable * table, int starting_qubit);
+int StabTable_shared_stab_ZX_form(StabTable * table, int starting_row, int q);
+int StabTable_cascading_ZX_form_only_doubles(StabTable * table, int starting_qubit);
+/*
  * Our magic states are equatorial
  * so <T|Z|T> = 0
  * here we delete any stabilisers with a Z in the magic region
@@ -128,4 +155,18 @@ int StabTable_delete_all_identity_qubits(StabTable * table, int * magic_qubit_nu
  */
 QCircuit * StabTable_simplifying_unitary(StabTable * table);
 
+int delete_columns_with_at_most_one_nontrivial_stabilizer(StabTable * state);
+
+int StabTable_row_reduction_upper_bound(StabTable * table);
+int StabTable_row_reduction_Z_table(StabTable * table);
+int StabTable_count_distinct_cols(StabTable * state);
+
+
+int StabTable_y_tilde_inner_prod_no_phase(StabTable * state, uint_bitarray_t y, char ** M);
+
+
+EquivClassDecomp StabTable_count_equivalence_classes(StabTable * state);
+
+int commutativity_diagram(StabTable * state, int measured_qubits, int t);
 #endif
+

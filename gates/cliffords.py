@@ -87,7 +87,7 @@ class SGate(CTypeCliffordGate):
         return state
 
     def __str__(self):
-        return "S({})".format(self.target)
+        return "SGate({})".format(self.target)
     def data(self):
         return "S", self.target
 
@@ -115,7 +115,7 @@ class XGate(CliffordGate):
         return state
 
     def __str__(self):
-        return "X({})".format(self.target)
+        return "XGate({})".format(self.target)
     def data(self):
         return "X", self.target
 
@@ -149,7 +149,7 @@ class CXGate(CTypeCliffordGate):
         return state
 
     def __str__(self):
-        return "CX({}, {})".format(self.target, self.control)
+        return "CXGate({}, {})".format(self.target, self.control)
 
     def data(self):
         return "CX", self.target, self.control
@@ -176,7 +176,7 @@ class CZGate(CTypeCliffordGate):
 
     
     def __str__(self):
-        return "CZ({}, {})".format(self.target, self.control)
+        return "CZGate({}, {})".format(self.target, self.control)
     
     def data(self):
         return "CZ", self.target, self.control

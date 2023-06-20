@@ -24,6 +24,7 @@ uint_bitarray_t bitarray_rand();
 
 void printBits(uint_bitarray_t x, int n);
 
-
+extern const uint_bitarray_t ZERO; //defined in bitarray.c
 extern const uint_bitarray_t ONE; //defined in bitarray.c
+extern const uint_bitarray_t MAX; //defined in bitarray.c
 #endif
