@@ -1896,25 +1896,34 @@ int commutativity_diagram(StabTable * state, int measured_qubits, int t, int ver
     }
   }
   if(verbose){
-    for(int j = 0; j < state->k; j++){
-      if(j == measured_qubits){
-        putc('\n', stdout);
+
+    BinaryExpression ** M_print = calloc(state->k, sizeof(BinaryExpression *));
+    for(int i = 0; i < state->k; i++){
+      M_print[i] = calloc(state->n, sizeof(BinaryExpression));
+      for(int j = 0; j < state->n; j++){
+        if(M[i][j] == 0){
+          M_print[i][j].data = NULL;
+          M_print[i][j].capacity = 0;
+          M_print[i][j].length = 0;
+        }else{
+          M_print[i][j].data = calloc(1, sizeof(uint_bitarray_t));
+          M_print[i][j].capacity = 1;
+          M_print[i][j].length = 1;
+          if(M[i][j] == 1){
+            M_print[i][j].data[0] = ZERO;
+          }else if(M[i][j] == -1 && (i >= measured_qubits)){
+            M_print[i][j].data[0] = (ONE << (i-measured_qubits));
+          }
+        }
       }
-      for(int i = 0; i < state->n; i++){
-        if(i == state->n - t){
-          putc(' ', stdout);
-        }
-        if(M[j][i] == 0){
-          putc('0', stdout);
-        }
-        if(M[j][i] > 0){
-          putc('1', stdout);
-        }
-        if(M[j][i] < 0 ){
-          putc('*', stdout);
-        }     
+    }
+    printf("Alg 3 before Gaussian eliminating\n");
+    BE_pprint_matrix(M_print, state->n, state->k);
+    for(int i = 0; i <state->k; i++){
+      for(int j = 0; j <state->n; j++){
+	free(M_print[i][j].data);
       }
-      putc('\n', stdout);
+      free(M_print[i]);
     }
   }
 
@@ -2111,9 +2120,7 @@ int commutativity_diagram(StabTable * state, int measured_qubits, int t, int ver
       rows += 1;
     }
   }
-  if(verbose){
-    BE_pprint_matrix(M2, state->n, state->k);
-  }
+  
   /*
     printf("++++++++++++++++\n");
     for(int i = 0; i < state->k; i++){
@@ -2255,6 +2262,10 @@ int commutativity_diagram(StabTable * state, int measured_qubits, int t, int ver
     }
     printf("-----------------------\n");
   */
+  if(verbose){
+    printf("Alg 3 after Gaussian eliminating\n");
+    BE_pprint_matrix(M2, state->n, state->k);
+  }
   for(int i = 0; i < state->k; i++){
     free(M[i]);
     for(int j = 0; j < state->n; j++){
