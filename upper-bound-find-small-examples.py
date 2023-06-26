@@ -1,20 +1,13 @@
 #! /usr/bin/env python3
 
 import numpy as np
-from chstate import CHState
-from agstate import AGState
-import constants
 import gates
 from gates import SGate, CXGate, CZGate, HGate, CompositeCliffordGate, SwapGate, PauliZProjector, XGate
 from gates import TGate, CompositeGate
 import itertools                    
 import util
 import random
-import matplotlib.cm as cm
-import matplotlib.colors as colors
-
 import clifford_t_estim
-import random
 
 seed = 1001 #random.randrange(0, 100000)
 #print(seed)
@@ -30,6 +23,7 @@ alg_1_wins_circuit = None
 alg_2_wins_circuit = None
 alg_3_wins_circuit = None
 
+verbose = 0 # paramater to describe how much stuff alg_3 prints out, input 1 for more data
 
 def convert_circuit_to_arrays(circ):
     aArray = np.array([0 for _ in range(measured_qubits)], dtype=np.uint8)    
@@ -68,7 +62,7 @@ while (alg_1_wins_circuit == None) or (alg_2_wins_circuit == None) or (alg_3_win
             alg_1_improvement = rows - measured_qubits
             nullity_upper_bound, final_t, r, d,  v = clifford_t_estim.upper_bound_alg_2(qubits, measured_qubits, np.copy(gateArray), np.copy(controlArray), np.copy(targetArray), np.copy(aArray))
             alg_2_improvement = v + nullity_upper_bound - measured_qubits        
-            n, k,  commutativity_diagram_rank = clifford_t_estim.upper_bound_alg_3(qubits, measured_qubits, np.copy(gateArray), np.copy(controlArray), np.copy(targetArray), np.copy(aArray))
+            n, k,  commutativity_diagram_rank = clifford_t_estim.upper_bound_alg_3(verbose, qubits, measured_qubits, np.copy(gateArray), np.copy(controlArray), np.copy(targetArray), np.copy(aArray))
             alg_3_improvement = T - commutativity_diagram_rank
 
             if alg_1_wins_circuit == None:
@@ -81,8 +75,14 @@ while (alg_1_wins_circuit == None) or (alg_2_wins_circuit == None) or (alg_3_win
                 if alg_3_improvement > max(alg_2_improvement, alg_1_improvement):
                     alg_3_wins_circuit = circ
 
+
+from stabtableau import GadgetizedStabState
 print("alg 1 circuit")
 print(alg_1_wins_circuit)
+state = GadgetizedStabState(qubits, alg_1_wins_circuit)
+print(state)
+gateArray, controlArray, targetArray, aArray = convert_circuit_to_arrays(alg_1_wins_circuit)
+clifford_t_estim.upper_bound_alg_3(1, qubits, measured_qubits, np.copy(gateArray), np.copy(controlArray), np.copy(targetArray), np.copy(aArray))
 
 
 print()

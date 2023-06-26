@@ -5558,8 +5558,8 @@ static PyObject * upper_bound_alg_3(PyObject* self, PyObject* args){
 
   int n;
   int measured_qubits;
-
-  if (!PyArg_ParseTuple(args, "iiO!O!O!O!", &n, &measured_qubits,
+  int verbose;
+  if (!PyArg_ParseTuple(args, "iiiO!O!O!O!", &verbose, &n, &measured_qubits,
                         &PyArray_Type, &gates,
                         &PyArray_Type, &controls,
                         &PyArray_Type, &targets,
@@ -5628,7 +5628,7 @@ static PyObject * upper_bound_alg_3(PyObject* self, PyObject* args){
     }
   }
 
-  int rank_bound = commutativity_diagram(state, measured_qubits, t);
+  int rank_bound = commutativity_diagram(state, measured_qubits, t, verbose);
   
   /*
   const long int dimensions1[1] = {state->n};

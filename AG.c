@@ -1880,7 +1880,7 @@ void commutativity_diagram_add_row(int ** M, int n, int source, int dest, char m
   }
 }
 
-int commutativity_diagram(StabTable * state, int measured_qubits, int t){
+int commutativity_diagram(StabTable * state, int measured_qubits, int t, int verbose){
 
   int ** M = (int **)calloc(measured_qubits + t, sizeof(int *));
   for(int i = 0; i < state->k; i++){
@@ -1892,9 +1892,32 @@ int commutativity_diagram(StabTable * state, int measured_qubits, int t){
       }
     }
     if(i >= measured_qubits){
-      M[i][i + t - measured_qubits] = 1;
+      M[i][i + (state->n-t) - measured_qubits] = 1;
     }
   }
+  if(verbose){
+    for(int j = 0; j < state->k; j++){
+      if(j == measured_qubits){
+        putc('\n', stdout);
+      }
+      for(int i = 0; i < state->n; i++){
+        if(i == state->n - t){
+          putc(' ', stdout);
+        }
+        if(M[j][i] == 0){
+          putc('0', stdout);
+        }
+        if(M[j][i] > 0){
+          putc('1', stdout);
+        }
+        if(M[j][i] < 0 ){
+          putc('*', stdout);
+        }     
+      }
+      putc('\n', stdout);
+    }
+  }
+
   int we_made_changes;
   do{
     we_made_changes = 0;
@@ -2019,25 +2042,25 @@ int commutativity_diagram(StabTable * state, int measured_qubits, int t){
 
   }while(we_made_changes);
   /*
-  for(int j = 0; j < state->k; j++){
+    for(int j = 0; j < state->k; j++){
     if(j == measured_qubits){
-      putc('\n', stdout);
+    putc('\n', stdout);
     }
     for(int i = 0; i < state->n; i++){
-      if(i == state->n - t){
-        putc(' ', stdout);
-      }
-      if(M[j][i] == 0){
-        putc('0', stdout);
-      }
-      if(M[j][i] > 0){
-        putc('1', stdout);
-      }
-      if(M[j][i] < 0 ){
-        putc('*', stdout);
-      }
+    if(i == state->n - t){
+    putc(' ', stdout);
+    }
+    if(M[j][i] == 0){
+    putc('0', stdout);
+    }
+    if(M[j][i] > 0){
+    putc('1', stdout);
+    }
+    if(M[j][i] < 0 ){
+    putc('*', stdout);
+    }
 
-      //printf("%d ", M[j][i]);
+    //printf("%d ", M[j][i]);
     }
     putc('\n', stdout);
     }*/
@@ -2088,22 +2111,25 @@ int commutativity_diagram(StabTable * state, int measured_qubits, int t){
       rows += 1;
     }
   }
+  if(verbose){
+    BE_pprint_matrix(M2, state->n, state->k);
+  }
   /*
-  printf("++++++++++++++++\n");
-  for(int i = 0; i < state->k; i++){
+    printf("++++++++++++++++\n");
+    for(int i = 0; i < state->k; i++){
     if(i == measured_qubits){
-      putc('\n', stdout);
+    putc('\n', stdout);
     }
     for(int j = 0; j < state->n; j++){
-      if(j == state->n - t){
-        putc(' ', stdout);
-      }
-      BE_print_summary(&M2[i][j]);
+    if(j == state->n - t){
+    putc(' ', stdout);
+    }
+    BE_print_summary(&M2[i][j]);
     }
     putc('\n', stdout);
-  }
+    }
 
-  printf("rows = %d\n", rows);
+    printf("rows = %d\n", rows);
   */
   int cols = 0;
   //first row-reduce without messing with pivots who have complicated expressions in their columns
@@ -2111,19 +2137,19 @@ int commutativity_diagram(StabTable * state, int measured_qubits, int t){
     int pivot = -1;
     for(int j = rows; j < state->k; j++){
       if((M2[j][i].length == 1) &&  (M2[j][i].data[0] == 0)){
-	/*
-        int found_complicated_expression = 0;
-        for(int k = j+1; k < state->k; k++){
+        /*
+          int found_complicated_expression = 0;
+          for(int k = j+1; k < state->k; k++){
           if((M2[k][i].length > 1) || (M2[k][i].length == 1 && M2[k][i].data[0] != ZERO)){
-            found_complicated_expression = 1;
-            break;
+          found_complicated_expression = 1;
+          break;
           }
-        }
-	*/
+          }
+        */
         //if(!found_complicated_expression){
-	pivot = j;
-	break;
-	//}
+        pivot = j;
+        break;
+        //}
       }
     }
     if(pivot >= 0){
@@ -2145,25 +2171,25 @@ int commutativity_diagram(StabTable * state, int measured_qubits, int t){
       //BE_pprint(&M2[rows][cols]);printf("\n");
       for(int j = 0; j < state->k; j++){
         if(j != rows && M2[j][cols].length != 0){
-	  //printf("adding row %d to %d to zero elem %d\n", rows, j, cols);
-	  //for(int k = 0; k < state->n; k++){
-	  //  BE_pprint(&M2[rows][k]); printf(" ");	    
-	  //}
-	  //printf("\n");
-	  //for(int k = 0; k < state->n; k++){
-	  //  BE_pprint(&M2[j][k]); printf(" ");	    
-	  //}
-	  //printf("\n");
-	  
+          //printf("adding row %d to %d to zero elem %d\n", rows, j, cols);
+          //for(int k = 0; k < state->n; k++){
+          //  BE_pprint(&M2[rows][k]); printf(" ");
+          //}
+          //printf("\n");
+          //for(int k = 0; k < state->n; k++){
+          //  BE_pprint(&M2[j][k]); printf(" ");
+          //}
+          //printf("\n");
+
           for(int k = 0; k < state->n; k++){
             BE_add_poly_mult(&M2[rows][k], &M2[j][k], &M2[j][cols]);
           }
-	  //if(M2[j][cols].length != 0){
-	  //  printf("hello\n");
-	  //  for(int k = 0; k < state->n; k++){
-	  //    BE_pprint(&M2[j][k]); printf(" ");	    
-	  //  }
-	  //}
+          //if(M2[j][cols].length != 0){
+          //  printf("hello\n");
+          //  for(int k = 0; k < state->n; k++){
+          //    BE_pprint(&M2[j][k]); printf(" ");
+          //  }
+          //}
         }
       }
       rows += 1;
@@ -2212,22 +2238,22 @@ int commutativity_diagram(StabTable * state, int measured_qubits, int t){
   }
   */
   /*
-  printf("\n\n");
-  printf("-----------------------\n");
-  printf("%d; %d\n",rows,cols);
-  for(int i = 0; i < state->k; i++){
+    printf("\n\n");
+    printf("-----------------------\n");
+    printf("%d; %d\n",rows,cols);
+    for(int i = 0; i < state->k; i++){
     if(i == measured_qubits){
-      putc('\n', stdout);
+    putc('\n', stdout);
     }
     for(int j = 0; j < state->n; j++){
-      if(j == state->n - t){
-        putc(' ', stdout);
-      }
-      BE_print_summary(&M2[i][j]);
+    if(j == state->n - t){
+    putc(' ', stdout);
+    }
+    BE_print_summary(&M2[i][j]);
     }
     putc('\n', stdout);
-  }
-  printf("-----------------------\n");
+    }
+    printf("-----------------------\n");
   */
   for(int i = 0; i < state->k; i++){
     free(M[i]);
@@ -2241,35 +2267,35 @@ int commutativity_diagram(StabTable * state, int measured_qubits, int t){
   free(M);
 
   /*
-  BinaryExpression one;
-  one.data = malloc(sizeof(uint_bitarray_t));
-  one.length = 1;
-  one.capacity = 1;
-  one.data[0] = 0;
-  BinaryExpression y1;
-  y1.data = malloc(sizeof(uint_bitarray_t));
-  y1.length = 1;
-  y1.capacity = 1;
-  y1.data[0] = ONE;
-  BinaryExpression y2;
-  y2.data = malloc(sizeof(uint_bitarray_t));
-  y2.length = 1;
-  y2.capacity = 1;
-  y2.data[0] = (ONE << 1);
+    BinaryExpression one;
+    one.data = malloc(sizeof(uint_bitarray_t));
+    one.length = 1;
+    one.capacity = 1;
+    one.data[0] = 0;
+    BinaryExpression y1;
+    y1.data = malloc(sizeof(uint_bitarray_t));
+    y1.length = 1;
+    y1.capacity = 1;
+    y1.data[0] = ONE;
+    BinaryExpression y2;
+    y2.data = malloc(sizeof(uint_bitarray_t));
+    y2.length = 1;
+    y2.capacity = 1;
+    y2.data[0] = (ONE << 1);
 
-  BinaryExpression poly;
-  poly.data = malloc(2*sizeof(uint_bitarray_t));
-  poly.length = 2;
-  poly.capacity = 2;
-  poly.data[0] = 0;
-  poly.data[1] = ONE | (ONE << 1 );
-  BE_pprint(&poly);printf("\n");
+    BinaryExpression poly;
+    poly.data = malloc(2*sizeof(uint_bitarray_t));
+    poly.length = 2;
+    poly.capacity = 2;
+    poly.data[0] = 0;
+    poly.data[1] = ONE | (ONE << 1 );
+    BE_pprint(&poly);printf("\n");
 
-  BE_add_poly_mult(&one, &poly, &poly);printf("\n");
-  BE_pprint(&poly);printf("\n");
-  
-  
-  printf("\n\n%d\n\n", rows);
+    BE_add_poly_mult(&one, &poly, &poly);printf("\n");
+    BE_pprint(&poly);printf("\n");
+
+
+    printf("\n\n%d\n\n", rows);
   */
   return rows;
 }

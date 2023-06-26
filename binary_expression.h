@@ -39,5 +39,6 @@ void BE_add_poly_mult(BinaryExpression * source, BinaryExpression * dest, Binary
 
 int BE_pprint(BinaryExpression * poly);
 void BE_print_summary(BinaryExpression * poly);
-
+int BE_pprint_size(BinaryExpression * poly);
+void BE_pprint_matrix(BinaryExpression ** M, int n, int k);
 #endif 

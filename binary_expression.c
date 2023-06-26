@@ -150,6 +150,52 @@ int BE_pprint(BinaryExpression * poly){
   return chars;
 }
 
+int BE_pprint_size(BinaryExpression * poly){
+  int chars = 0;  
+  if(poly->length == 0){
+    chars += snprintf(NULL, 0, "0 ");
+  }
+  
+  for(int i = 0; i < poly->length; i++){
+    if(poly->data[i] == ZERO){
+      chars += snprintf(NULL, 0, "1 ");
+    }else{
+      for(int j = 0; j < 8*sizeof(uint_bitarray_t); j++){
+        if((poly->data[i] >> j) & ONE){
+          chars += snprintf(NULL, 0, "y%d ", j);
+        }
+      }
+    }
+
+    if(i != poly->length - 1){
+      chars += snprintf(NULL, 0, "+ ");
+    }
+  }
+  return chars;
+}
+
+void BE_pprint_matrix(BinaryExpression ** M, int n, int k){
+  int * column_widths = calloc(sizeof(int), n);
+  for(int q = 0; q < n; q++){
+    for(int i = 0; i < k; i++){
+      int width = BE_pprint_size(&M[i][q]);
+      if(width > column_widths[q]){
+	column_widths[q] = width;
+      }
+    }
+  }
+  for(int i = 0; i < k; i++){
+    for(int q = 0; q < n; q++){
+      int width = BE_pprint(&M[i][q]);
+      for(int j = width; j < column_widths[q]; j++){
+	printf(" ");
+      }
+    }
+    printf("\n");
+  }
+
+  free(column_widths);
+}
 
 void BE_print_summary(BinaryExpression * poly){
   if(poly->length == 1){
