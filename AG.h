@@ -168,5 +168,7 @@ int StabTable_y_tilde_inner_prod_no_phase(StabTable * state, uint_bitarray_t y, 
 EquivClassDecomp StabTable_count_equivalence_classes(StabTable * state);
 
 int commutativity_diagram(StabTable * state, int measured_qubits, int t, int verbose);
+
+int StabTable_zero_inner_product(StabTable * state, int w, int t);
 #endif
 

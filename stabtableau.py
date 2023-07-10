@@ -109,9 +109,10 @@ class GadgetizedStabState:
             self.z[i][a] ^= self.z[i][b]
             
     def CZ(self, a,b):
-        self.H(b)
-        self.CX(a,b)
-        self.H(b)
+        GadgetizedStabState.H(self, b)
+        GadgetizedStabState.CX(self, a, b)
+        GadgetizedStabState.H(self, b)
+
         
     def phaseless_cb_inner_product(self):
         """

@@ -5118,7 +5118,100 @@ int row_reduce_binary_table(unsigned char ** matrix, int width, int height){
   return k;
 }
 
+static PyObject * slowly_compute_m_upper_bound(PyObject* self, PyObject* args){
+  PyArrayObject * gates;
+  PyArrayObject * controls;
+  PyArrayObject * targets;
+  PyArrayObject * a; // project |a_i><a_i| on qubit i on the first w qubits (a is length w array)
 
+  int n;
+  int measured_qubits;
+
+  if (!PyArg_ParseTuple(args, "iiO!O!O!O!", &n, &measured_qubits,
+                        &PyArray_Type, &gates,
+                        &PyArray_Type, &controls,
+                        &PyArray_Type, &targets,
+                        &PyArray_Type, &a
+                        )){
+    return NULL;
+  }
+
+  //gatetize all the t gates
+  int t = 0;
+  for(int i = 0; i < gates->dimensions[0]; i++){
+    if(((char)gates->data[i*gates->strides[0]]) == T){
+      gates->data[i*gates->strides[0]] = CX;
+      //controls->data[i*controls->strides[0]] = (unsigned int)targets->data[i*targets->strides[0]];
+      unsigned int * ptr = (unsigned int *)PyArray_GETPTR1(controls, i);
+      *ptr = *(unsigned int *)PyArray_GETPTR1(targets, i);
+      ptr = (unsigned int *)PyArray_GETPTR1(targets, i);
+      *ptr = (unsigned int)(n + t);
+      t += 1;
+    }
+  }
+
+  //now we do the stabiliser evolution
+  //to compute V|0>
+  //printf("%u, %u, %u\n", n, t, n+t);
+  StabTable * state = StabTable_new(n+t, n+t);
+
+  for(int i = 0; i < gates->dimensions[0]; i++){
+    //printf("%d, %c, %d, %d\n", i, gates->data[i*gates->strides[0]],controls->data[i*controls->strides[0]], targets->data[i*targets->strides[0]]);
+    switch((char)gates->data[i*gates->strides[0]]) {
+    case CX:
+      StabTable_CX(state, (*(unsigned int *)PyArray_GETPTR1(controls,i)), (*(unsigned int *)PyArray_GETPTR1(targets,i)));
+      break;
+    case CZ:
+      StabTable_CZ(state, (*(unsigned int *)PyArray_GETPTR1(controls,i)), (*(unsigned int *)PyArray_GETPTR1(targets,i)));
+      break;
+    case S:
+      StabTable_S(state, (*(unsigned int *)PyArray_GETPTR1(targets,i)));
+      break;
+    case H:
+      StabTable_H(state, (*(unsigned int *)PyArray_GETPTR1(targets,i)));
+      break;
+    }
+  }
+  //printf("m1\n");
+
+  //in the sequel we will assume that the CB measurement outcome we are interested in at the end is |0...0>
+  //we "fix" this by applying a bunch of X gates to the measured qubits here
+  for(int i = 0; i < measured_qubits; i++){
+    if((unsigned char)a->data[i*a->strides[0]]){
+      //printf("flipping qubit %d\n", i);
+      StabTable_X(state, i);
+    }
+  }
+
+  int max_m_y = -1;
+  
+  for(uint_bitarray_t y = 0; y < (ONE << t); y++){
+    for(int q = 0; q < t; q++){
+      if((y >> q) & ONE){
+	StabTable_S(state, q);
+      }
+      StabTable_H(state, q);
+    }
+
+    int m_y = StabTable_zero_inner_product(state, measured_qubits, t);
+    if(m_y > max_m_y){
+      m_y = max_m_y;
+    }
+    for(int q = 0; q < t; q++){
+      StabTable_H(state, q);
+      if((y >> q) & ONE){
+	StabTable_S(state, q);
+	StabTable_S(state, q);
+	StabTable_S(state, q);
+      }      
+    }
+  }
+
+  
+
+  StabTable_free(state);
+  return Py_BuildValue("i", max_m_y);
+}
 
 static PyObject * upper_bound_alg_1(PyObject* self, PyObject* args){
   PyArrayObject * gates;
@@ -5732,7 +5825,7 @@ static PyObject * upper_bound_alg_2(PyObject* self, PyObject* args){
   if(log_v < 0){
     //printf("region a qubits inconsistent with measurement outcome\n");
     StabTable_free(state);
-    return Py_BuildValue("ii", -1, 0); //PyComplex_FromDoubles(0., 0.);
+    return Py_BuildValue("i", -1); //PyComplex_FromDoubles(0., 0.);
   }
 
   //printf("\\tilde{G}\n");
@@ -6682,6 +6775,7 @@ static PyMethodDef myMethods[] = {
   { "upper_bound_alg_1", upper_bound_alg_1, METH_VARARGS, "Test UB"},
   { "upper_bound_alg_1_test", upper_bound_alg_1_test, METH_VARARGS, "Test UB"},
   { "upper_bound_alg_3", upper_bound_alg_3, METH_VARARGS, "Test UB"},
+  { "slowly_compute_m_upper_bound", slowly_compute_m_upper_bound, METH_VARARGS, "sdfsdf"},
   //{"compress_algorithm_keep_qubits", compress_algorithm_keep_qubits, METH_VARARGS, "Test UB"},
   { NULL, NULL, 0, NULL }
 };

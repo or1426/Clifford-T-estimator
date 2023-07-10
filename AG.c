@@ -2636,6 +2636,54 @@ int commutativity_diagram_old(StabTable * state, int measured_qubits, int t){
 
 
 
+int StabTable_zero_inner_product(StabTable * state, int w, int t){
+  int s = 0;
+  for(int q = 0; q < w; q++){
+    int pivot = -1;
+    for(int k = s; k < state->k; k++){
+      if(state->table[k][q] == 1){
+	pivot = k;
+	break;
+      }
+    }
+    if(pivot >= 0){
+      if(s != pivot){
+	StabTable_swap_rows(state, s, pivot);
+      }
+      for(int k = 0; k < state->k; k++){
+	if((k != s) && (state->table[k][q] == 1)){
+	  StabTable_rowsum(state, k, s);
+	}
+      }
+      s += 1;
+    }  
+  }
+
+  for(int q = state->n-t; q < state->n; q++){
+    int pivot = -1;
+    for(int k = s; k < state->k; k++){
+      if(state->table[k][q] == 1){
+	pivot = k;
+	break;
+      }
+    }
+    if(pivot >= 0){
+      if(s != pivot){
+	StabTable_swap_rows(state, s, pivot);
+      }
+      for(int k = 0; k < state->k; k++){
+	if((k != s) && (state->table[k][q] == 1)){
+	  StabTable_rowsum(state, k, s);
+	}
+      }
+      s += 1;
+    }  
+  }
+  int x_region_rank = s;
+  
+  return x_region_rank;
+}
+
 int StabTable_y_tilde_inner_prod_no_phase(StabTable * state, uint_bitarray_t y, char ** M){
   /* for(int q = 0; q < t; q++){ */
   /*   if((y>>q) & ONE){ */
