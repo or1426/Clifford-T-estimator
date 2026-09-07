@@ -53,12 +53,12 @@ PyObject * CHForm_to_python_tuple(CHForm * state){
   const long int dimensions1[1] = {state->n};
   const long int dimensions2[2] = {state->n, state->n};
 
-  PyArrayObject * F = (PyArrayObject*)PyArray_SimpleNew(2, dimensions2,  PyArray_UBYTE);
-  PyArrayObject * G = (PyArrayObject*)PyArray_SimpleNew(2, dimensions2,  PyArray_UBYTE);
-  PyArrayObject * M = (PyArrayObject*)PyArray_SimpleNew(2, dimensions2,  PyArray_UBYTE);
-  PyArrayObject * g = (PyArrayObject*)PyArray_SimpleNew(1, dimensions1,  PyArray_UBYTE);
-  PyArrayObject * v = (PyArrayObject*)PyArray_SimpleNew(1, dimensions1,  PyArray_UBYTE);
-  PyArrayObject * s = (PyArrayObject*)PyArray_SimpleNew(1, dimensions1,  PyArray_UBYTE);
+  PyArrayObject * F = (PyArrayObject*)PyArray_SimpleNew(2, dimensions2,  NPY_UBYTE);
+  PyArrayObject * G = (PyArrayObject*)PyArray_SimpleNew(2, dimensions2,  NPY_UBYTE);
+  PyArrayObject * M = (PyArrayObject*)PyArray_SimpleNew(2, dimensions2,  NPY_UBYTE);
+  PyArrayObject * g = (PyArrayObject*)PyArray_SimpleNew(1, dimensions1,  NPY_UBYTE);
+  PyArrayObject * v = (PyArrayObject*)PyArray_SimpleNew(1, dimensions1,  NPY_UBYTE);
+  PyArrayObject * s = (PyArrayObject*)PyArray_SimpleNew(1, dimensions1,  NPY_UBYTE);
 
   for(int i = 0; i < state->n; i++){
     for(int j = 0; j < state->n; j++){
@@ -75,7 +75,7 @@ PyObject * CHForm_to_python_tuple(CHForm * state){
   Py_complex phase;
   phase.real = creal(state->w);
   phase.imag = cimag(state->w);
-  return Py_BuildValue("iOOOOOOD", state->n, F, G, M, g, v, s, &phase);
+  return Py_BuildValue("iNNNNNND", state->n, F, G, M, g, v, s, &phase);
 }
 
 CHForm * c_apply_gates_to_basis_state(int n, PyArrayObject * gates, PyArrayObject * controls, PyArrayObject * targets){
@@ -123,7 +123,7 @@ unsigned int sort_pauli_string(uint n, uint_bitarray_t * x, uint_bitarray_t * z,
 double complex measurement_overlap(CHForm * state, uint_bitarray_t x){
   //compute the inner product <x | state>
   //where the bitstring x determines a computational basis state
-  uint_fast64_t u = 0;
+  uint_bitarray_t u = 0;
   // u = x F
   for(int i =0; i < state->n; i++){
     for(int j=0; j <state->n;j++){
@@ -445,7 +445,7 @@ void init_zero_equatorial_matrix(equatorial_matrix_t * matrix, int n){
   matrix->d2 = 0u;
 }
 
-void init_random_equatorial_matrix(equatorial_matrix_t * matrix, int n){
+void init_random_equatorial_matrix(equatorial_matrix_t * matrix, int n, const gsl_rng *rng){
   matrix->n = n;
   matrix->mat = (uint_bitarray_t*)calloc(n, sizeof(uint_bitarray_t));
   uint_bitarray_t mask = 0u;
@@ -453,7 +453,7 @@ void init_random_equatorial_matrix(equatorial_matrix_t * matrix, int n){
     mask |= (ONE<<i);
   }
   for(int i = 0; i < n; i++){
-    matrix->mat[i] = (bitarray_rand()) & mask;
+    matrix->mat[i] = (bitarray_rand(rng)) & mask;
   }
   for(int i = 0; i < n; i++){
     for(int j = 0; j < i; j++){
@@ -462,8 +462,8 @@ void init_random_equatorial_matrix(equatorial_matrix_t * matrix, int n){
     }
     matrix->mat[i] &= ~(ONE << i);
   }
-  matrix->d1 = bitarray_rand() & mask;
-  matrix->d2 = bitarray_rand() & mask;
+  matrix->d1 = bitarray_rand(rng) & mask;
+  matrix->d2 = bitarray_rand(rng) & mask;
 }
 
 void dealocate_equatorial_matrix(equatorial_matrix_t * matrix){
@@ -624,7 +624,7 @@ double complex equatorial_inner_product(CHForm* state, equatorial_matrix_t equat
   bool mu1_consts = false;
   bool mu2_consts = false;
 
-  uint_fast64_t mask = 0;
+  uint_bitarray_t mask = 0;
   for(uint i = 0; i < n; i++){
     mask |= (ONE << i);
   }
@@ -687,8 +687,8 @@ double complex equatorial_inner_product(CHForm* state, equatorial_matrix_t equat
       }
 
       killed += 2;
-      uint_fast64_t m1 = M[r];
-      uint_fast64_t m2 = M[c];
+      uint_bitarray_t m1 = M[r];
+      uint_bitarray_t m2 = M[c];
 
       for(uint i=0; i<n;i++){
         m1 ^= (((M[i] >> r) & ONE) << i);
@@ -1163,7 +1163,7 @@ double complex equatorial_inner_product2(CHForm* state, uint_bitarray_t * A, uin
   bool mu1_consts = false;
   bool mu2_consts = false;
 
-  uint_fast64_t mask = 0;
+  uint_bitarray_t mask = 0;
   for(uint i = 0; i < n; i++){
     mask |= (ONE << i);
   }
@@ -1226,8 +1226,8 @@ double complex equatorial_inner_product2(CHForm* state, uint_bitarray_t * A, uin
       }
 
       killed += 2;
-      uint_fast64_t m1 = M[r];
-      uint_fast64_t m2 = M[c];
+      uint_bitarray_t m1 = M[r];
+      uint_bitarray_t m2 = M[c];
 
       for(uint i=0; i<n;i++){
         m1 ^= (((M[i] >> r) & ONE) << i);
@@ -1419,6 +1419,9 @@ static PyObject * magic_sample_1(PyObject* self, PyObject* args){
     }
   }
 
+  gsl_rng * RNG = gsl_rng_alloc(gsl_rng_mt19937);
+  gsl_rng_set(RNG, seed);
+
   postselect_and_reduce(evolved_state, bitA, bitMask);
   //printf("c1 after postselection\n");
   //print_CHForm(evolved_state);
@@ -1428,7 +1431,7 @@ static PyObject * magic_sample_1(PyObject* self, PyObject* args){
 
   equatorial_matrix_t * equatorial_matrices = calloc(equatorial_samples, sizeof(equatorial_matrix_t));
   for(int i = 0; i < equatorial_samples; i++){
-    init_random_equatorial_matrix(&(equatorial_matrices[i]), evolved_state->n - t);
+    init_random_equatorial_matrix(&(equatorial_matrices[i]), evolved_state->n - t, RNG);
   }
 
   uint_bitarray_t magic_mask = 0u;
@@ -1440,7 +1443,7 @@ static PyObject * magic_sample_1(PyObject* self, PyObject* args){
 
   uint_bitarray_t * ys = calloc(magic_samples, sizeof(uint_bitarray_t));
   for(int i = 0; i < magic_samples; i++){
-    ys[i] = bitarray_rand() & magic_mask;
+    ys[i] = bitarray_rand(RNG) & magic_mask;
   }
 
   double complex * inner_prods = calloc(equatorial_samples, sizeof(double complex));
@@ -1516,7 +1519,7 @@ static PyObject * magic_sample_1(PyObject* self, PyObject* args){
   free(equatorial_matrices);
   dealocate_state(evolved_state);
   free(evolved_state);
-
+  gsl_rng_free(RNG);
   return PyComplex_FromDoubles(creal(acc), cimag(acc));
 }
 
@@ -1543,8 +1546,6 @@ static PyObject * magic_sample_2(PyObject* self, PyObject* args){
                         )){
     return NULL;
   }
-
-  srand(seed);
 
   //gatetize all the t gates
   int t = 0;
@@ -1584,9 +1585,12 @@ static PyObject * magic_sample_2(PyObject* self, PyObject* args){
   //containing n - w - qubit equatorial states
   //ie. (n-w) x (n-w) binary symmetric matrices
 
+  gsl_rng * RNG = gsl_rng_alloc(gsl_rng_mt19937);
+  gsl_rng_set(RNG, seed);
+
   equatorial_matrix_t * equatorial_matrices = calloc(equatorial_samples, sizeof(equatorial_matrix_t));
   for(int i = 0; i < equatorial_samples; i++){
-    init_random_equatorial_matrix(&(equatorial_matrices[i]), evolved_state->n - t);
+    init_random_equatorial_matrix(&(equatorial_matrices[i]), evolved_state->n - t, RNG);
   }
 
   uint_bitarray_t magic_mask = 0;
@@ -1598,7 +1602,7 @@ static PyObject * magic_sample_2(PyObject* self, PyObject* args){
 
   uint_bitarray_t * ys = calloc(magic_samples, sizeof(uint_bitarray_t));
   for(int i = 0; i < magic_samples; i++){
-    ys[i] = (bitarray_rand() & magic_mask) >> (evolved_state->n - t);
+    ys[i] = (bitarray_rand(RNG) & magic_mask) >> (evolved_state->n - t);
   }
 
 
@@ -1640,7 +1644,6 @@ static PyObject * magic_sample_2(PyObject* self, PyObject* args){
     double complex overlaps = 0;
     for(int i = 0; i < magic_samples; i++){
       CHForm inner_copy = copy_CHForm(&copy);
-      //uint_bitarray_t y = bitarray_rand() & magic_mask;
       int hamming_weight = popcount(ys[i]);
       double complex prefactor = powl(2., (t+ beta*t)/2)*cpowl(alpha_c_phase, t-hamming_weight)*cpowl(alpha_phase, hamming_weight);
       //printf("c2 prefactor(%lf, %lf)\n", creal(prefactor), cimag(prefactor));
@@ -1693,8 +1696,6 @@ static PyObject * main_simulation_algorithm(PyObject* self, PyObject* args){
                         )){
     return NULL;
   }
-
-  srand(seed);
 
   //gatetize all the t gates
   int t = 0;
@@ -1828,9 +1829,12 @@ static PyObject * main_simulation_algorithm(PyObject* self, PyObject* args){
   //at this point we want to generate a list of length equatorial_samples
   //containing t - r - qubit equatorial states
   //ie. (t-r) x (t-r) binary symmetric matrices
+  gsl_rng * RNG = gsl_rng_alloc(gsl_rng_mt19937);
+  gsl_rng_set(RNG, seed);
+
   equatorial_matrix_t * equatorial_matrices = calloc(equatorial_samples, sizeof(equatorial_matrix_t));
   for(int i = 0; i < equatorial_samples; i++){
-    init_random_equatorial_matrix(&(equatorial_matrices[i]), state->n-state->k);
+    init_random_equatorial_matrix(&(equatorial_matrices[i]), state->n-state->k, RNG);
   }
   //printf("a\n");
   uint_bitarray_t magic_mask = 0;
@@ -1841,7 +1845,7 @@ static PyObject * main_simulation_algorithm(PyObject* self, PyObject* args){
   //printf("b\n");
   uint_bitarray_t * ys = calloc(magic_samples, sizeof(uint_bitarray_t));
   for(int i = 0; i < magic_samples; i++){
-    ys[i] = bitarray_rand() & magic_mask;
+    ys[i] = bitarray_rand(RNG) & magic_mask;
   }
   //printf("c\n");
   uint_bitarray_t equatorial_mask = 0;
@@ -2046,7 +2050,6 @@ static PyObject * main_simulation_algorithm2(PyObject* self, PyObject* args){
   }
 
   //printf("%d, %d, %d\n", n, magic_samples, equatorial_samples);
-  srand(seed);
 
   //gatetize all the t gates
   int t = 0;
@@ -2164,12 +2167,16 @@ static PyObject * main_simulation_algorithm2(PyObject* self, PyObject* args){
   //QCircuit_free(W);
   //printf("after freeing W\n");
 
+  gsl_rng * RNG = gsl_rng_alloc(gsl_rng_mt19937);
+  gsl_rng_set(RNG, seed);
+
+
   //at this point we want to generate a list of length equatorial_samples
   //containing t - r - qubit equatorial states
   //ie. (t-r) x (t-r) binary symmetric matrices
   equatorial_matrix_t * equatorial_matrices = calloc(equatorial_samples, sizeof(equatorial_matrix_t));
   for(int i = 0; i < equatorial_samples; i++){
-    init_random_equatorial_matrix(&(equatorial_matrices[i]), state->n-state->k);
+    init_random_equatorial_matrix(&(equatorial_matrices[i]), state->n-state->k, RNG);
   }
   //printf("a\n");
   uint_bitarray_t magic_mask = 0;
@@ -2180,7 +2187,7 @@ static PyObject * main_simulation_algorithm2(PyObject* self, PyObject* args){
   //printf("b\n");
   uint_bitarray_t * ys = calloc(magic_samples, sizeof(uint_bitarray_t));
   for(int i = 0; i < magic_samples; i++){
-    ys[i] = bitarray_rand() & magic_mask;
+    ys[i] = bitarray_rand(RNG) & magic_mask;
   }
   //printf("c\n");
   uint_bitarray_t equatorial_mask = 0;
@@ -2283,6 +2290,7 @@ static PyObject * main_simulation_algorithm2(PyObject* self, PyObject* args){
   StabTable_free(agState);
   dealocate_state(&chState);
   StabTable_free(state);
+  gsl_rng_free(RNG);
   //printf("c1(%lf, %lf)\n", creal(acc), cimag(acc));
   return PyComplex_FromDoubles(creal(acc), cimag(acc));
 }
@@ -2883,7 +2891,6 @@ struct timespec diff(struct timespec start, struct timespec end)
   }
   return temp;
 }
-
 static PyObject * compute_algorithm_gray(PyObject* self, PyObject* args){
   PyArrayObject * gates;
   PyArrayObject * controls;
@@ -2948,10 +2955,15 @@ static PyObject * compute_algorithm_gray(PyObject* self, PyObject* args){
     }
   }
 
+  
   int log_v = StabTable_apply_constraints(state, measured_qubits, t);
+  //printf("%d %d %d\n", log_v, state->n, state->k);
   if(log_v < 0){
+    int n_copy = state->n;
+    int k_copy = state->k;
+    //printf("negative log_v %d %d %d\n", log_v, n_copy, k_copy);
     StabTable_free(state);
-    return Py_BuildValue("d", 0); //PyComplex_FromDoubles(0., 0.);
+    return Py_BuildValue("diii", 0.0, log_v, n_copy, k_copy); //PyComplex_FromDoubles(0., 0.);
   }
 
 
@@ -3034,9 +3046,173 @@ static PyObject * compute_algorithm_gray(PyObject* self, PyObject* args){
   }
 
   acc *= powl(2., log_v - measured_qubits);
-
+  int n_copy = state->n;
+  int k_copy = state->k;
   StabTable_free(state);
-  return Py_BuildValue("d", acc);
+  return Py_BuildValue("diii", acc, log_v, n_copy, k_copy);
+}
+
+
+static PyObject * fake_compute_algorithm_to_benchmark_hidden_shift(PyObject* self, PyObject* args){
+  PyArrayObject * gates;
+  PyArrayObject * controls;
+  PyArrayObject * targets;
+  PyArrayObject * a; // project |a_i><a_i| on qubit i on the first w qubits (a is length w array)
+
+  int n;
+  int measured_qubits;
+
+  if (!PyArg_ParseTuple(args, "iiO!O!O!O!", &n, &measured_qubits,
+                        &PyArray_Type, &gates,
+                        &PyArray_Type, &controls,
+                        &PyArray_Type, &targets,
+                        &PyArray_Type, &a
+                        )){
+    return NULL;
+  }
+
+  //gatetize all the t gates
+  int t = 0;
+  for(int i = 0; i < gates->dimensions[0]; i++){
+    if(((char)gates->data[i*gates->strides[0]]) == T){
+      gates->data[i*gates->strides[0]] = CX;
+      unsigned int * ptr = (unsigned int *)PyArray_GETPTR1(controls, i);
+      *ptr = *(unsigned int *)PyArray_GETPTR1(targets, i);
+      ptr = (unsigned int *)PyArray_GETPTR1(targets, i);
+      *ptr = (unsigned int)(n + t);
+      t += 1;
+    }
+  }
+
+
+  //now we do the stabiliser evolution
+  //to compute W
+
+  StabTable * state = StabTable_new(n+t, n+t);
+
+  for(int i = 0; i < gates->dimensions[0]; i++){
+    //printf("%d, %c, %d, %d\n", i, gates->data[i*gates->strides[0]],controls->data[i*controls->strides[0]], targets->data[i*targets->strides[0]]);
+    switch((*(unsigned char *)PyArray_GETPTR1(gates,i))) {
+    case CX:
+      StabTable_CX(state, (*(unsigned int *)PyArray_GETPTR1(controls,i)), (*(unsigned int *)PyArray_GETPTR1(targets,i)));
+      break;
+    case CZ:
+      StabTable_CZ(state, (*(unsigned int *)PyArray_GETPTR1(controls,i)), (*(unsigned int *)PyArray_GETPTR1(targets,i)));
+      break;
+    case S:
+      StabTable_S(state, (*(unsigned int *)PyArray_GETPTR1(targets,i)));
+      break;
+    case H:
+      StabTable_H(state, (*(unsigned int *)PyArray_GETPTR1(targets,i)));
+      break;
+    }
+  }
+
+  //in the sequel we will assume that the CB measurement outcome we are interested in at the end is |0...0>
+  //we "fix" this by applying a bunch of X gates to the measured qubits here
+  for(int i = 0; i < measured_qubits; i++){
+    if((*(unsigned char *)PyArray_GETPTR1(a,i)) == 1){
+      //printf("flipping %d\n",i);
+      StabTable_X(state, i);
+    }
+  }
+
+  
+  int log_v = StabTable_apply_constraints(state, measured_qubits, t);
+  //printf("%d %d %d\n", log_v, state->n, state->k);
+  if(log_v < 0){
+    int n_copy = state->n;
+    int k_copy = state->k;
+    //printf("negative log_v %d %d %d\n", log_v, n_copy, k_copy);
+    StabTable_free(state);
+    return Py_BuildValue("diii", 0.0, log_v, n_copy, k_copy); //PyComplex_FromDoubles(0., 0.);
+  }
+
+
+  //now delete the first (n) = table->n - t (since table->n = n + t at this point) qubits
+  // at this point we should just be left with t qubits
+  int q_to_delete = state->n - t;
+  int new_size = t;
+
+  for(int s = 0; s < state->k; s++){
+    for(int q = q_to_delete; q < state->n; q++){
+      state->table[s][q-q_to_delete] = state->table[s][q];
+    }
+    for(int q = q_to_delete; q < state->n; q++){
+      state->table[s][q-2*q_to_delete+state->n] = state->table[s][q+state->n];
+    }
+    state->table[s] = realloc(state->table[s], sizeof(unsigned char) * 2 * new_size);
+  }
+  state->n = new_size;
+
+  int r = state->n - state->k;
+
+
+  StabTable_delete_all_identity_qubits(state, NULL);
+  StabTable_apply_T_constraints(state,t);
+  StabTable_delete_all_identity_qubits(state, NULL);
+
+  //we explicitly compute the sum appearing in 10
+  uint_bitarray_t full_mask = 0u;
+  for(int i = 0; i < state->k; i++){
+    full_mask |= (ONE << i);
+  }
+  double acc = 1.;
+  /*
+  unsigned char * row = calloc(2*state->n, sizeof(unsigned char));
+  unsigned char phase = 0;
+  for(uint_bitarray_t mask = 1u; mask <= full_mask; mask++){
+    uint_bitarray_t mask_with_bit_to_flip = BinaryToGray(mask) ^ BinaryToGray(mask - 1);
+    size_t bit_to_flip = 0;
+    for(int j = 0; j < state->k; j++){
+      if((mask_with_bit_to_flip >> j) & ONE){
+        bit_to_flip = j;
+        break;
+      }
+    }
+
+    phase = StabTable_rowsum2(state, row, phase, bit_to_flip);
+
+    int XCount = 0;
+    int YCount = 0;
+    int ZCount = 0;
+
+    for(int j = 0; j < state->n; j++){
+      //if((row[j] == 0) && (row[j+state->n] == 0)){
+      //    ICount += 1;
+      //}
+      if((row[j] == 1) && (row[j+state->n] == 0)){
+        XCount += 1;
+      }
+      if((row[j] == 0) && (row[j+state->n] == 1)){
+        ZCount += 1;
+        break;
+      }
+      if((row[j] == 1) && (row[j+state->n] == 1)){
+        YCount += 1;
+      }
+    }
+
+    if(ZCount == 0){
+      if(((phase + YCount) % 2) == 0){
+        acc += powl(1./2., (XCount + YCount)/2.);;
+      }else{
+        acc -= powl(1./2., (XCount + YCount)/2.);;
+      }
+    }
+
+  }
+  free(row);
+  if(full_mask == 0u){
+    acc = 1;
+  }
+
+  acc *= powl(2., log_v - measured_qubits);
+  */
+  int n_copy = state->n;
+  int k_copy = state->k;
+  StabTable_free(state);
+  return Py_BuildValue("diii", 0.0, log_v, n_copy, k_copy);
 }
 
 
@@ -3209,6 +3385,7 @@ static PyObject * compute_algorithm_gray_with_arbitrary_phases(PyObject* self, P
 
   return Py_BuildValue("d", acc);
 }
+
 
 
 
@@ -3389,22 +3566,22 @@ static PyObject * StabTable_to_python_tuple(StabTable * table){
   const long int dimensions1[1] = {table->k};
   const long int dimensions2[2] = {table->k, 2*table->n};
 
-  PyArrayObject * py_table = (PyArrayObject*)PyArray_SimpleNew(2, dimensions2,  PyArray_UBYTE);
-  PyArrayObject * py_phases = (PyArrayObject*)PyArray_SimpleNew(1, dimensions1,  PyArray_UBYTE);
+  PyArrayObject * py_table = (PyArrayObject*)PyArray_SimpleNew(2, dimensions2,  NPY_UBYTE);
+  PyArrayObject * py_phases = (PyArrayObject*)PyArray_SimpleNew(1, dimensions1,  NPY_UBYTE);
   for(int s = 0; s < table->k; s++){
     for(int q = 0; q < 2*table->n; q++){
       py_table->data[s*py_table->strides[0] + q*py_table->strides[1]] = (unsigned char)table->table[s][q];
     }
     py_phases->data[s*py_phases->strides[0]] = table->phases[s];
   }
-  return Py_BuildValue("iiOO", table->n, table->k, (PyObject*)py_table, (PyObject*)py_phases);
+  return Py_BuildValue("iiNN", table->n, table->k, (PyObject*)py_table, (PyObject*)py_phases);
 }
 
 static StabTable * python_tuple_to_StabTable(PyObject * tuple){
   PyObject * py_n = PyTuple_GetItem(tuple, 0);
   PyObject * py_k = PyTuple_GetItem(tuple, 1);
-  PyObject * py_table = PyTuple_GetItem(tuple, 2);
-  PyObject * py_phases = PyTuple_GetItem(tuple, 3);
+  PyArrayObject * py_table = (PyArrayObject *)PyTuple_GetItem(tuple, 2);
+  PyArrayObject * py_phases = (PyArrayObject *)PyTuple_GetItem(tuple, 3);
 
   int n = PyLong_AsLong(py_n);
   int k = PyLong_AsLong(py_k);
@@ -3614,7 +3791,7 @@ static PyObject * compress_algorithm(PyObject* self, PyObject* args){
     magic_qubit_numbers[i] = i;
   }
 
-  StabTable_pprint_table(state, 0);
+  //StabTable_pprint_table(state, 0);
 
   int delta_t = StabTable_delete_all_identity_qubits(state, magic_qubit_numbers);
 
@@ -3686,7 +3863,7 @@ static PyObject * compress_algorithm(PyObject* self, PyObject* args){
   //Py_DECREF(targets);
   //Py_DECREF(a);
   //printf("hi2\n");
-  return Py_BuildValue("iiiiiiiiiOOO", d, r, t, delta_d, delta_t, delta_t_prime, final_d, final_t, log_v, pyChState, pyAGState, magic_arr);
+  return Py_BuildValue("iiiiiiiiiNNN", d, r, t, delta_d, delta_t, delta_t_prime, final_d, final_t, log_v, pyChState, pyAGState, magic_arr);
 }
 
 static PyObject * compress_algorithm_no_state_output(PyObject* self, PyObject* args){
@@ -4144,9 +4321,14 @@ static PyObject * estimate_algorithm(PyObject* self, PyObject* args){
   //at this point we want to generate a list of length equatorial_samples
   //containing r - qubit equatorial states
   //ie. r x r binary symmetric matrices
+
+  gsl_rng * RNG = gsl_rng_alloc(gsl_rng_mt19937);
+  gsl_rng_set(RNG, seed);
+
+  
   equatorial_matrix_t * equatorial_matrices = calloc(equatorial_samples, sizeof(equatorial_matrix_t));
   for(int i = 0; i < equatorial_samples; i++){
-    init_random_equatorial_matrix(&(equatorial_matrices[i]), r);
+    init_random_equatorial_matrix(&(equatorial_matrices[i]), r, RNG);
   }
   //printf("a\n");
   uint_bitarray_t magic_mask = 0;
@@ -4157,7 +4339,7 @@ static PyObject * estimate_algorithm(PyObject* self, PyObject* args){
   //printf("b\n");
   uint_bitarray_t * ys = calloc(magic_samples, sizeof(uint_bitarray_t));
   for(int i = 0; i < magic_samples; i++){
-    ys[i] = bitarray_rand() & magic_mask;
+    ys[i] = bitarray_rand(RNG) & magic_mask;
   }
   //printf("c\n");
   uint_bitarray_t equatorial_mask = 0;
@@ -4265,7 +4447,7 @@ static PyObject * estimate_algorithm(PyObject* self, PyObject* args){
   free(Y);
   free(bitK);
   free(M);
-
+  gsl_rng_free(RNG);
   StabTable_free(agState);
   dealocate_state(chState);
   dealocate_state(&allOnesState);
@@ -4274,17 +4456,19 @@ static PyObject * estimate_algorithm(PyObject* self, PyObject* args){
 }
 
 static PyObject * estimate_algorithm_r_equals_0(PyObject* self, PyObject* args){
-  int magic_samples, log_v, measured_qubits, seed;
+  int magic_samples, log_v, seed;
   PyObject * CHTuple;
   PyObject * AGTuple;
 
-  if (!PyArg_ParseTuple(args, "iiiiO!O!", &magic_samples,  &measured_qubits, &log_v,  &seed,
+  if (!PyArg_ParseTuple(args, "iiiO!O!", &magic_samples,  &log_v,  &seed,
                         &PyTuple_Type, &CHTuple,
                         &PyTuple_Type, &AGTuple
                         )){
     return NULL;
   }
-  srand(seed);
+
+  gsl_rng * RNG = gsl_rng_alloc(gsl_rng_mt19937);
+  gsl_rng_set(RNG, seed);
 
   CHForm * chState = python_tuple_to_CHForm(CHTuple);
   StabTable * agState = python_tuple_to_StabTable(AGTuple);
@@ -4297,7 +4481,7 @@ static PyObject * estimate_algorithm_r_equals_0(PyObject* self, PyObject* args){
   //printf("b\n");
   uint_bitarray_t * ys = calloc(magic_samples, sizeof(uint_bitarray_t));
   for(int i = 0; i < magic_samples; i++){
-    ys[i] = bitarray_rand() & magic_mask;
+    ys[i] = bitarray_rand(RNG) & magic_mask;
   }
 
   double complex alpha = (1. - I*(sqrt(2.) - 1.))/2.;
@@ -4339,6 +4523,7 @@ static PyObject * estimate_algorithm_r_equals_0(PyObject* self, PyObject* args){
   free(z_mat);
   StabTable_free(agState);
   dealocate_state(chState);
+  gsl_rng_free(RNG);
   free(chState);
   return PyComplex_FromDoubles(creal(prob), cimag(prob));
 }
@@ -4493,7 +4678,7 @@ double complex fast_equatorial_inner_product(CHForm* state, equatorial_matrix_t 
   bool mu1_consts = false;
   bool mu2_consts = false;
 
-  uint_fast64_t mask = 0;
+  uint_bitarray_t mask = 0;
   for(uint i = 0; i < n; i++){
     mask |= (ONE << i);
   }
@@ -4556,8 +4741,8 @@ double complex fast_equatorial_inner_product(CHForm* state, equatorial_matrix_t 
       }
 
       killed += 2;
-      uint_fast64_t m1 = M[r];
-      uint_fast64_t m2 = M[c];
+      uint_bitarray_t m1 = M[r];
+      uint_bitarray_t m2 = M[c];
 
       for(uint i=0; i<n;i++){
         m1 ^= (((M[i] >> r) & ONE) << i);
@@ -4617,7 +4802,6 @@ static PyObject * estimate_algorithm_with_arbitrary_phases(PyObject* self, PyObj
                         )){
     return NULL;
   }
-  srand(seed);
 
   gsl_rng * RNG = gsl_rng_alloc(gsl_rng_mt19937);
   gsl_rng_set(RNG, seed);
@@ -4646,9 +4830,10 @@ static PyObject * estimate_algorithm_with_arbitrary_phases(PyObject* self, PyObj
   //at this point we want to generate a list of length equatorial_samples
   //containing r - qubit equatorial states
   //ie. r x r binary symmetric matrices
+  
   equatorial_matrix_t * equatorial_matrices = calloc(equatorial_samples, sizeof(equatorial_matrix_t));
   for(int i = 0; i < equatorial_samples; i++){
-    init_random_equatorial_matrix(&(equatorial_matrices[i]), r);
+    init_random_equatorial_matrix(&(equatorial_matrices[i]), r, RNG);
   }
   //printf("a\n");
   uint_bitarray_t magic_mask = 0;
@@ -4997,7 +5182,9 @@ static PyObject * estimate_algorithm_r_equals_0_with_arbitrary_phases(PyObject* 
                         )){
     return NULL;
   }
-  srand(seed);
+
+  gsl_rng * RNG = gsl_rng_alloc(gsl_rng_mt19937);
+  gsl_rng_set(RNG, seed);
 
   CHForm * chState = python_tuple_to_CHForm(CHTuple);
   StabTable * agState = python_tuple_to_StabTable(AGTuple);
@@ -5024,7 +5211,7 @@ static PyObject * estimate_algorithm_r_equals_0_with_arbitrary_phases(PyObject* 
   //printf("b\n");
   uint_bitarray_t * ys = calloc(magic_samples, sizeof(uint_bitarray_t));
   for(int i = 0; i < magic_samples; i++){
-    ys[i] = bitarray_rand() & magic_mask;
+    ys[i] = bitarray_rand(RNG) & magic_mask;
   }
 
   //double complex alpha = (1. - I*(sqrt(2.) - 1.))/2.;
@@ -5072,6 +5259,7 @@ static PyObject * estimate_algorithm_r_equals_0_with_arbitrary_phases(PyObject* 
   free(z_mat);
   StabTable_free(agState);
   dealocate_state(chState);
+  gsl_rng_free(RNG);
   free(chState);
   return PyComplex_FromDoubles(creal(prob), cimag(prob));
 }
@@ -5727,9 +5915,9 @@ static PyObject * upper_bound_alg_3(PyObject* self, PyObject* args){
   const long int dimensions1[1] = {state->n};
   const long int dimensions2[2] = {state->k, state->n};
 
-  PyArrayObject * X = (PyArrayObject*)PyArray_SimpleNew(2, dimensions2,  PyArray_UBYTE);
-  PyArrayObject * Z = (PyArrayObject*)PyArray_SimpleNew(2, dimensions2,  PyArray_UBYTE);
-  PyArrayObject * r = (PyArrayObject*)PyArray_SimpleNew(1, dimensions1,  PyArray_UBYTE);
+  PyArrayObject * X = (PyArrayObject*)PyArray_SimpleNew(2, dimensions2,  NPY_UBYTE);
+  PyArrayObject * Z = (PyArrayObject*)PyArray_SimpleNew(2, dimensions2,  NPY_UBYTE);
+  PyArrayObject * r = (PyArrayObject*)PyArray_SimpleNew(1, dimensions1,  NPY_UBYTE);
 
   for(int i = 0; i < state->k; i++){
     for(int j = 0; j < state->n; j++){
@@ -6138,11 +6326,17 @@ static PyObject * upper_bound_test4(PyObject* self, PyObject* args){
 
     PyObject * py_nullity = PyLong_FromLong(nullity);
     PyObject * count = PyDict_GetItem(freq_dict, py_nullity);
+
+    PyObject *new_count;
     if(count){
-      PyDict_SetItem(freq_dict, py_nullity, PyLong_FromLong(PyLong_AsLong(count) + 1));
+      new_count = PyLong_FromLong(PyLong_AsLong(count) + 1);
     }else{
-      PyDict_SetItem(freq_dict, py_nullity, PyLong_FromLong(1));
+      new_count = PyLong_FromLong(1);
     }
+    
+    PyDict_SetItem(freq_dict, py_nullity, new_count);
+    Py_XDECREF(new_count);
+    Py_DECREF(py_nullity);
 
   }
 
@@ -6180,7 +6374,7 @@ static PyObject * upper_bound_test4(PyObject* self, PyObject* args){
 
   StabTable_free(state);
 
-  return Py_BuildValue("iiiiO",  nullity_upper_bound, final_t, r, d, freq_dict);
+  return Py_BuildValue("iiiiN",  nullity_upper_bound, final_t, r, d, freq_dict);
 }
 
 
@@ -6776,6 +6970,7 @@ static PyMethodDef myMethods[] = {
   { "upper_bound_alg_1_test", upper_bound_alg_1_test, METH_VARARGS, "Test UB"},
   { "upper_bound_alg_3", upper_bound_alg_3, METH_VARARGS, "Test UB"},
   { "slowly_compute_m_upper_bound", slowly_compute_m_upper_bound, METH_VARARGS, "sdfsdf"},
+  { "fake_compute_algorithm_to_benchmark_hidden_shift", fake_compute_algorithm_to_benchmark_hidden_shift, METH_VARARGS, "compute algorithm without actually running the exponential part"},
   //{"compress_algorithm_keep_qubits", compress_algorithm_keep_qubits, METH_VARARGS, "Test UB"},
   { NULL, NULL, 0, NULL }
 };

@@ -50,7 +50,7 @@ if __name__ == "__main__":
     #now lets see what the Compute algorithm does with this circuit
     print("Analytic probability = ", (1+numpy.cos(numpy.pi/4))/2)
     gates, controls, targets = util.convert_circuit_to_numpy_arrays(circ) # note the Compress algorithm code changes the gate arrays in place to do gagetization
-    prob_compute = clifford_t_estim.compute_algorithm(qubits, measured_qubits, gates, controls, targets, measurement_outcome)
+    prob_compute = clifford_t_estim.compute_algorithm_gray(qubits, measured_qubits, gates, controls, targets, measurement_outcome)
 
     print("Compute probability =", prob_compute)
     m = numpy.sqrt(4.-2*numpy.sqrt(2))   #sqrt(stabilizer extent)

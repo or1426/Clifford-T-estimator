@@ -4,6 +4,7 @@
 #include "bitarray.h"
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 /*
  * the idea here is simple
  * we store a polynomial formed of binary variables (y_i)_{i=1}^n

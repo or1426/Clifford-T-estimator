@@ -20,7 +20,7 @@ unsigned int parity_uint_fast64_t(uint_fast64_t x){
 
 unsigned int parity_unsigned__int128(unsigned __int128 x){
     unsigned __int128 mask = ((unsigned __int128)0xFFFFFFFFFFFFFFFFu);
-    return __builtin_parityll((unsigned long long)(x & (mask<<64))) ^ __builtin_parityll((unsigned long long)( (x&mask)  >>64));
+    return __builtin_parityll((unsigned long long)(x & mask)) ^ __builtin_parityll((unsigned long long)( (x >> 64) & mask));
 }
 
 unsigned int popcount_generic(uint_bitarray_t x){
@@ -36,17 +36,26 @@ unsigned int popcount_uint_fast64_t(uint_fast64_t x){
 
 unsigned int popcount_unsigned__int128(unsigned __int128 x){
     unsigned __int128 mask = ((unsigned __int128)0xFFFFFFFFFFFFFFFFu);
-    return __builtin_popcountll((unsigned long long)(x & (mask<<64))) + __builtin_popcountll((unsigned long long)( (x&mask)  >>64));
+    return __builtin_popcountll((unsigned long long)(x & mask)) + __builtin_popcountll((unsigned long long)((x >>64) & mask));
 }
 
 
-uint_bitarray_t bitarray_rand(){
+uint_bitarray_t bitarray_rand(const gsl_rng *rng){
     uint_bitarray_t val = 0;
-    for(int i = 0; i < sizeof(uint_bitarray_t); i++){
-        val ^= (((uint_bitarray_t)(((unsigned char)rand() % 256))) << (8*i));
+    for(int i = 0; i < 8*sizeof(uint_bitarray_t); i++){
+      val ^= ((uint_bitarray_t)gsl_ran_bernoulli(rng, 0.5)) << i;
     }
     return val;
 }
+
+uint_bitarray_t bitarray_rand_probs(const gsl_rng *rng, double * probs){
+    uint_bitarray_t val = 0;
+    for(int i = 0; i < 8*sizeof(uint_bitarray_t); i++){
+      val ^= ((uint_bitarray_t)gsl_ran_bernoulli(rng, probs[i])) << i;
+    }
+    return val;
+}
+
 
 void printBits(uint_bitarray_t x, int n){
     uint_bitarray_t ONE = 1;

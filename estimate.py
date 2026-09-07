@@ -79,16 +79,18 @@ def dDeltaPrimeDs(p, deltaTarg, s, tau, m, t, r, eta):
     a = -np.power(np.sqrt(p + eta*eps) - np.sqrt(p), 2)/(2*np.power(m + 1, 2))    
     b = -np.power((1-eta)*eps/(p+eta*eps), 2)
 
-    return 2*np.exp(2)*a*np.exp(a*s) - np.exp(b*L)*b*(tau/(np.power(s,2))/r*r*r)
+    return 2*np.exp(2)*a*np.exp(a*s) - np.exp(b*L)*b*(tau/(np.power(s,2)*r*r*r))
     
 def dDeltaPrimeDsPositive(p, deltaTarg, s, tau, m, t, r, eta):
-    L = (tau - s*t*t*(t-r))/(s*r*r*r) - LMin(deltaTarg, eta)
-    eps = epsPrime(p, deltaTarg, eta, s, L, m, precision=1e-15)
+    
+    L_total = (tau - s*t*t*(t-r))/(s*r*r*r)
+    L_plus = L_total - LMin(deltaTarg, eta)
+    eps = epsPrime(p, deltaTarg, eta, s, L_plus, m, precision=1e-15)
     
     a = -np.power(np.sqrt(p + eta*eps) - np.sqrt(p), 2)/(2*np.power(m + 1, 2))    
     b = -np.power((1-eta)*eps/(p+eta*eps), 2)
 
-    return ((np.log(-b*tau) - 2*np.log(float(s)) - 3*np.log(float(r)) + b*L) > (np.log(-a)+2+np.log(2.) + a*s))
+    return ((np.log(-b*tau) - 2*np.log(float(s)) - 3*np.log(float(r)) + b*L_total) > (np.log(-a)+2+np.log(2.) + a*s))
     
     
 def eps_at_particular_eta(p, deltaTarg, tau, m, eta, t, r, precision):
@@ -218,10 +220,11 @@ def epsStar(p, deltaTot, tau, m, t, r, eta_prec=1e-10, deriv_prec=0.1, eps_prec=
             if lower_eps > lower_adj_eps:
                 found_lower_bound = True
 
-    #now we have an upper and lower bound so we just keep diving until we're done
+    #now we have an upper and lower bound so we just keep dividing until we're done
     #print("upper = ", upper_eta_bound, "lower = ", lower_eta_bound)
     width = upper_eta_bound - lower_eta_bound
     midpoint_eps, s = None, None
+    midpoint = (upper_eta_bound + lower_eta_bound)/2
     while width > eta_prec:
         midpoint = lower_eta_bound + width/2.
         midpoint_eps, s = eps_at_particular_eta(p, deltaTot, tau, m, midpoint, t,r,eps_prec)
@@ -233,8 +236,8 @@ def epsStar(p, deltaTot, tau, m, t, r, eta_prec=1e-10, deriv_prec=0.1, eps_prec=
         else:
             lower_eta_bound = midpoint
         width = upper_eta_bound - lower_eta_bound
-
-    LPlusBest = int(np.ceil((tau - s*t*t*(t-r))/(s*r*r*r) - LMin(deltaTot, eta)))
+    
+    LPlusBest = int(np.ceil((tau - s*t*t*(t-r))/(s*r*r*r) - LMin(deltaTot, midpoint)))
     #if LPlusBest < 0:
     #    print(eta, deltaTot, LMin(deltaTot, eta))
     return (midpoint_eps, midpoint, s, LPlusBest)
@@ -391,7 +394,7 @@ def runtime(p, m, epsTot, deltaTot, t, r, delta_UB, K_UUB):
         eta_tilde_best = None
         for eta_tilde in np.linspace(1/100, 1-1/100, 100):
             if LPlus + LMin(6*deltaTot/np.power(np.pi*k,2), eta) - LMin(delta_UB/K_UUB, eta_tilde) >= 1:
-                val = epsPrime(p, delta_UB/K_UUB, eta, s, np.ceil(LPlus + LMin(6*deltaTot/np.power(np.pi*k,2), eta) - LMin(delta_UB/K_UUB, eta_tilde)), m, precision=1e-15)
+                val = epsPrime(p, delta_UB/K_UUB, eta_tilde, s, np.ceil(LPlus + LMin(6*deltaTot/np.power(np.pi*k,2), eta) - LMin(delta_UB/K_UUB, eta_tilde)), m, precision=1e-15)
                 if val < min_eps_prime:
                     min_eps_prime = val
                     eta_tilde_best = eta_tilde
